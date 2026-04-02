@@ -61,31 +61,42 @@ export default class GameManager extends cc.Component {
     this.state = GameState.STOPPING;
 
     this.reels.forEach((r, i) => {
-      cc.log(`📌 Scheduling stop for reel ${i} with target:`, this.spinResult[i]);
-      this.scheduleOnce(() => {
-        r.stop(this.spinResult[i]);
-      }, i * 0.5);
+      cc.log(`📌 Stopping reel ${i} with target:`, this.spinResult[i]);
+      r.stop(this.spinResult[i]);
     });
 
     this.scheduleOnce(() => {
       this.onResult();
-    }, 2);
+    }, 1); // Reduces the result delay since they stop faster now
   }
 
   onResult() {
     this.state = GameState.RESULT;
 
-    let middleLine = [
-      this.spinResult[0][1],
-      this.spinResult[1][1],
-      this.spinResult[2][1],
+    let lines = [
+      // 橫向 3 條 (Top, Mid, Bot)
+      [this.spinResult[0][0], this.spinResult[1][0], this.spinResult[2][0]],
+      [this.spinResult[0][1], this.spinResult[1][1], this.spinResult[2][1]],
+      [this.spinResult[0][2], this.spinResult[1][2], this.spinResult[2][2]],
+      // 交叉 2 條 (\, /)
+      [this.spinResult[0][0], this.spinResult[1][1], this.spinResult[2][2]],
+      [this.spinResult[0][2], this.spinResult[1][1], this.spinResult[2][0]]
     ];
 
-    let win = this.payout.evaluate(middleLine);
+    let totalWinMultipliers = 0;
+    for (let i = 0; i < lines.length; i++) {
+      let win = this.payout.evaluate(lines[i]);
+      if (win > 0) {
+        cc.log(`🎉 Line ${i} won ${win}x! Line:`, lines[i]);
+        totalWinMultipliers += win;
+      }
+    }
 
-    if (win > 0) {
-      this.credit += win * this.bet;
+    if (totalWinMultipliers > 0) {
+      let coinsWon = totalWinMultipliers * this.bet;
+      this.credit += coinsWon;
       this.ui.playWin();
+      cc.log(`🎉 Total Win! You won ${coinsWon} credits (${totalWinMultipliers}x)`);
     }
 
     this.ui.updateCredit(this.credit);

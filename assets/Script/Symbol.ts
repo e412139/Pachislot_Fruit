@@ -19,6 +19,6 @@ export default class SymbolComp extends cc.Component {
   }
 
   getName(type: number): string {
-    return ["A", "B", "C", "D", "W", "S"][type];
+    return ["🍏", "🍌", "🍓", "🍊", "🍉", "⭐"][type];
   }
 }
