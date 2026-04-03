@@ -17,6 +17,7 @@ export default class Reel extends cc.Component {
   targetSymbols: SymbolType[] = [];
 
   symbolHeight: number = 60;
+  offsetY: number = 0;
   
   // We use this to track which target symbol we should spawn next when stopping
   stoppingIndex: number = -1;
@@ -30,6 +31,7 @@ export default class Reel extends cc.Component {
     // Clear out any placeholder nodes so they don't overlap as "Q"s
     this.node.removeAllChildren();
     this.symbols = [];
+    this.offsetY = 0;
 
     for (let i = 0; i < 5; i++) {
       let node = cc.instantiate(this.symbolPrefab);
@@ -67,18 +69,13 @@ export default class Reel extends cc.Component {
   update(dt: number) {
     if (!this.isSpinning) return;
 
-    this.node.y -= this.speed * dt;
+    this.offsetY -= this.speed * dt;
 
-    if (this.node.y <= -this.symbolHeight) {
-      this.node.y += this.symbolHeight;
+    if (this.offsetY <= -this.symbolHeight) {
+      this.offsetY += this.symbolHeight;
 
       let last = this.symbols.pop();
       this.symbols.unshift(last);
-
-      // Reassign accurate y coordinates
-      for (let i = 0; i < 5; i++) {
-        this.symbols[i].y = 120 - i * this.symbolHeight;
-      }
 
       let symbolComp = this.symbols[0].getComponent(SymbolComp);
       if (symbolComp) {
@@ -101,6 +98,11 @@ export default class Reel extends cc.Component {
       }
     }
 
+    // Apply offset directly to symbols, keeping node stationary for the mask
+    for (let i = 0; i < 5; i++) {
+      this.symbols[i].y = 120 - i * this.symbolHeight + this.offsetY;
+    }
+
     if (this.isStopping && this.stoppingIndex < -1) {
       this.tryStop();
     }
@@ -109,12 +111,17 @@ export default class Reel extends cc.Component {
   tryStop() {
     // Check if the current reel has completed its necessary offset 
     // to put the scheduled items in the middle 
-    if (this.node.y <= 0 && this.node.y > -20) { 
+    if (this.offsetY <= 0 && this.offsetY > -20) { 
       // Snap exactly into place
       this.alignToResult();
       this.isSpinning = false;
       this.isStopping = false;
-      this.node.y = 0;
+      this.offsetY = 0;
+      
+      for (let i = 0; i < 5; i++) {
+        this.symbols[i].y = 120 - i * this.symbolHeight;
+      }
+      
       cc.log("✅ Reel fully stopped");
     }
   }
