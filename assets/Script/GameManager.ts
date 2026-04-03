@@ -15,6 +15,20 @@ export default class GameManager extends cc.Component {
   @property(UIController)
   ui: UIController = null;
 
+  @property([cc.Node])
+  lightNodes: cc.Node[] = [];
+
+  @property(cc.Node)
+  stateWaitNode: cc.Node = null;
+
+  @property(cc.Node)
+  stateStartNode: cc.Node = null;
+
+  @property(cc.Node)
+  stateReplayNode: cc.Node = null;
+
+
+
   state: GameState = GameState.IDLE;
 
   rng = new RNGService();
@@ -27,8 +41,60 @@ export default class GameManager extends cc.Component {
 
   onLoad() {
     this.ui.updateCredit(this.credit);
+    this.endSpinSequence();
   }
 
+  endSpinSequence() {
+    // 停止可能還在跑的動畫
+    if (this.stateStartNode) cc.Tween.stopAllByTarget(this.stateStartNode);
+    this.lightNodes.forEach(node => { if (node) cc.Tween.stopAllByTarget(node); });
+
+    // 待機時 stateWaitNode 亮燈，其餘不亮
+    if (this.stateWaitNode) this.stateWaitNode.opacity = 255;
+    if (this.stateStartNode) this.stateStartNode.opacity = 100;
+    this.lightNodes.forEach(node => { if (node) node.opacity = 100; });
+  }
+
+  startSpinSequence() {
+    // onSpinClick 狀態
+    // stateWaitNode 不亮燈
+    if (this.stateWaitNode) this.stateWaitNode.opacity = 100;
+
+    // 先將所有燈光設為半透明 (暗色狀態)，並停止舊動畫
+    if (this.stateStartNode) {
+      cc.Tween.stopAllByTarget(this.stateStartNode);
+      this.stateStartNode.opacity = 100;
+    }
+
+    this.lightNodes.forEach(node => {
+      if (node) {
+        cc.Tween.stopAllByTarget(node);
+        node.opacity = 100;
+      }
+    });
+
+    let delayTime = 0;
+    const interval = 0.2; // 稍微調快間隔時間以配合旋轉速度
+
+    // stateStartNode 亮燈
+    if (this.stateStartNode) {
+      cc.tween(this.stateStartNode)
+        .delay(delayTime)
+        .to(0.1, { opacity: 255 }) // 0.1秒內變成全亮
+        .start();
+    }
+
+    // 依序點亮 (Light up) lightNodes
+    for (let i = 0; i < this.lightNodes.length; i++) {
+      if (this.lightNodes[i]) {
+        delayTime += interval;
+        cc.tween(this.lightNodes[i])
+          .delay(delayTime)
+          .to(0.1, { opacity: 255 }) // 0.1秒內變成全亮
+          .start();
+      }
+    }
+  }
   onSpinClick() {
     cc.log("🎰 onSpinClick() called, current state:", this.state);
     if (this.state !== GameState.IDLE) {
@@ -39,6 +105,7 @@ export default class GameManager extends cc.Component {
     this.credit -= this.bet;
     this.ui.updateCredit(this.credit);
 
+    this.startSpinSequence();
     this.startSpin();
   }
 
@@ -60,14 +127,18 @@ export default class GameManager extends cc.Component {
     cc.log("🛑 stopReels() called");
     this.state = GameState.STOPPING;
 
+    let stoppedCount = 0;
+
     this.reels.forEach((r, i) => {
       cc.log(`📌 Stopping reel ${i} with target:`, this.spinResult[i]);
-      r.stop(this.spinResult[i]);
+      r.stop(this.spinResult[i], () => {
+        stoppedCount++;
+        if (stoppedCount === this.reels.length) {
+          cc.log("💯 All reels have fully stopped! Triggering onResult instantly.");
+          this.onResult();
+        }
+      });
     });
-
-    this.scheduleOnce(() => {
-      this.onResult();
-    }, 1); // Reduces the result delay since they stop faster now
   }
 
   onResult() {
@@ -101,6 +172,7 @@ export default class GameManager extends cc.Component {
 
     this.ui.updateCredit(this.credit);
 
+    this.endSpinSequence(); // 一次spin結束後，將燈號還原到待機狀態
     this.state = GameState.IDLE;
   }
 }

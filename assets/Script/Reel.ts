@@ -18,9 +18,10 @@ export default class Reel extends cc.Component {
 
   symbolHeight: number = 60;
   offsetY: number = 0;
-  
+
   // We use this to track which target symbol we should spawn next when stopping
   stoppingIndex: number = -1;
+  stopCallback: Function = null;
 
   start() {
     this.speed = 1000;
@@ -59,11 +60,12 @@ export default class Reel extends cc.Component {
     this.stoppingIndex = -1;
   }
 
-  stop(target: SymbolType[]) {
+  stop(target: SymbolType[], callback?: Function) {
     cc.log("🛑 Reel.stop() called with target:", target);
     this.targetSymbols = target;
     this.isStopping = true;
     this.stoppingIndex = 2; // the bottom target symbol index to spawn first
+    this.stopCallback = callback;
   }
 
   update(dt: number) {
@@ -111,18 +113,23 @@ export default class Reel extends cc.Component {
   tryStop() {
     // Check if the current reel has completed its necessary offset 
     // to put the scheduled items in the middle 
-    if (this.offsetY <= 0 && this.offsetY > -20) { 
+    if (this.offsetY <= 0 && this.offsetY > -20) {
       // Snap exactly into place
       this.alignToResult();
       this.isSpinning = false;
       this.isStopping = false;
       this.offsetY = 0;
-      
+
       for (let i = 0; i < 5; i++) {
         this.symbols[i].y = 120 - i * this.symbolHeight;
       }
-      
+
       cc.log("✅ Reel fully stopped");
+      if (this.stopCallback) {
+        let cb = this.stopCallback;
+        this.stopCallback = null;
+        cb();
+      }
     }
   }
 

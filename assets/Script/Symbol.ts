@@ -19,6 +19,7 @@ export default class SymbolComp extends cc.Component {
   }
 
   getName(type: number): string {
-    return ["🍏", "🍌", "🍓", "🍊", "🍉", "⭐"][type];
+    //對應 A B C D WILD SCATTER
+    return ["🍏", "🍌", "🍒", "🫐", "🍉", "⭐"][type];
   }
 }

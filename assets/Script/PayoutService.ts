@@ -7,9 +7,6 @@ export default class PayoutService {
     // 處理 WILD
     let base = line.find(s => s !== SymbolType.WILD);
 
-    // 如果沒有 base，代表整條連線都是 WILD，給予最高倍率
-    if (base === undefined) return 100;
-
     let normalized = line.map(s => s === SymbolType.WILD ? base : s);
 
     if (this.match(normalized, SymbolType.A)) return 50;
