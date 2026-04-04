@@ -55,9 +55,35 @@ export default class Reel extends cc.Component {
 
   spin() {
     cc.log("🔄 Reel.spin() called");
+    this.resetAnimations();
     this.isSpinning = true;
     this.isStopping = false;
     this.stoppingIndex = -1;
+  }
+
+  resetAnimations() {
+    for (let i = 0; i < this.symbols.length; i++) {
+      if (this.symbols[i]) {
+        cc.Tween.stopAllByTarget(this.symbols[i]);
+        this.symbols[i].opacity = 255;
+      }
+    }
+  }
+
+  playWinAnimation(rowIndex: number) {
+    let symbolNode = this.symbols[rowIndex + 1];
+    if (symbolNode) {
+      // 避免因為多條連線重複執行導致錯亂
+      cc.Tween.stopAllByTarget(symbolNode);
+      symbolNode.opacity = 255;
+      cc.tween(symbolNode)
+        .repeatForever(
+          cc.tween()
+            .to(0.3, { opacity: 50 }) // 稍微變淡
+            .to(0.3, { opacity: 255 }) // 恢復全亮
+        )
+        .start();
+    }
   }
 
   stop(target: SymbolType[], callback?: Function) {
