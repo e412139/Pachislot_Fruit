@@ -82,7 +82,7 @@ export default class GameManager extends cc.Component {
   private riggedResult: SymbolType[][] = null; // 測試模式用的強制結果
 
   onLoad() {
-    this.ui.updateCredit(this.credit);
+    this.ui.updateScore(this.credit);
     this.endSpinSequence();
     this.hideBigWin(); // 初始時隱藏 BigWin
     this.updateSpinButtonUI(); // 初始化按鈕文字
@@ -259,7 +259,7 @@ export default class GameManager extends cc.Component {
     }
 
     this.credit -= this.bet;
-    this.ui.updateCredit(this.credit);
+    this.ui.updateScore(this.credit);
 
     this.startSpinSequence();
     this.startSpin();
@@ -363,7 +363,7 @@ export default class GameManager extends cc.Component {
       cc.log(`🎉 Total Win! You won ${coinsWon} credits (${totalWinMultipliers}x)`);
     }
 
-    this.ui.updateCredit(this.credit);
+    this.ui.updateScore(this.credit);
 
     this.endSpinSequence(); // 一次spin結束後，將燈號還原到待機狀態
     this.state = GameState.IDLE;

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Game Rules</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #1a0b2e 0%, #000000 100%);
+      color: #fff;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .container {
+      padding: 20px 25px;
+      /* 預留右上角給 Cocos X 關閉按紐的空間 */
+      padding-top: 40px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #ffd700;
+      text-shadow: 0 0 10px #ffd70055;
+      margin-top: 10px;
+      font-size: 1.8rem;
+      letter-spacing: 2px;
+    }
+
+    .section {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 215, 0, 0.2);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    }
+
+    h2 {
+      color: #ffa500;
+      font-size: 1.2rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th,
+    td {
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
+    th {
+      color: #ddd;
+      font-weight: 600;
+    }
+
+    td.mul {
+      color: #00ffcc;
+      font-weight: bold;
+      text-align: right;
+      font-size: 1.1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      background: rgba(255, 215, 0, 0.2);
+      color: #ffd700;
+    }
+
+    ul {
+      padding-left: 20px;
+      line-height: 1.6;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    .close-btn {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      backdrop-filter: blur(4px);
+    }
+
+    .close-btn:active {
+      background: rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+
+<body>
+  <!-- WebView 專屬關閉按鈕，同時支援 Web 預覽與未來打包 Native 手機 -->
+  <a href="javascript:void(0)" onclick="closeCocos()" class="close-btn">✖</a>
+
+  <script>
+    function closeCocos() {
+      // 1. 發送 Web 專用的 postMessage (解決電腦網頁預覽沒反應的問題)
+      if (window.parent) {
+        window.parent.postMessage('cocos_close', '*');
+      }
+      // 2. 觸發 Native 手機專用的 URL Scheme
+      window.location.href = "cocos://close";
+    }
+  </script>
+
+  <div class="container">
+    <h1>遊戲賠率與連線說明</h1>
+
+    <div class="section">
+      <h2>🏆 符號賠率表 (連線 3 顆)</h2>
+      <table>
+        <tr>
+          <th>符號</th>
+          <th>名稱類別</th>
+          <th style="text-align: right;">贏分倍率</th>
+        </tr>
+        <tr>
+          <td><span class="badge">🍏 符號</span></td>
+          <td>Super Win 最高獎</td>
+          <td class="mul">x 50</td>
+        </tr>
+        <tr>
+          <td><span class="badge">🍌 符號</span></td>
+          <td>Mega Win 大獎</td>
+          <td class="mul">x 20</td>
+        </tr>
+        <tr>
+          <td><span class="badge">🍒 符號</span></td>
+          <td>Big Win 鉅賞</td>
+          <td class="mul">x 10</td>
+        </tr>
+        <tr>
+          <td><span class="badge">🫐 符號</span></td>
+          <td>一般獎金</td>
+          <td class="mul">x 5</td>
+        </tr>
+        <tr>
+          <td><span class="badge"
+              style="background: rgba(255,0,0,0.3); color: #ff6666; border: 1px solid #ff6666;">SCATTER ⭐ 符號</span>
+          </td>
+          <td>分散免費獎</td>
+          <td class="mul" style="color: #ff6666;">x 100</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>🃏 特殊規則與操作說明</h2>
+      <ul>
+        <li><strong style="color: #ffd700;">WILD 🍉 百搭符號：</strong> 可以代替畫面上所有除了 SCATTER 以外的任何一般圖標，來幫助湊成連線獎金！</li>
+        <li><strong style="color: #00ffcc;">5 條有效連線 (Paylines)：</strong> 包含了上方水平、中央水平、下方水平，以及兩條交叉對角線。當同一條線上湊齊 3
+          個符合圖案即算中獎。</li>
+        <li><strong style="color: #ffa500;">自動旋轉 (Auto Spin)：</strong> 您可以在遊戲主畫面中<strong
+            style="text-decoration: underline;">長按 Spin 按鈕 0.5 秒</strong>喚出隱藏的自動掛機局數選單。</li>
+      </ul>
+    </div>
+  </div>
+</body>
+
+</html>
