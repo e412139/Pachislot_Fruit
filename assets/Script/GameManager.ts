@@ -108,6 +108,14 @@ export default class GameManager extends cc.Component {
     }
   }
 
+  onDestroy() {
+    if (this.btn_spinNode) {
+      this.btn_spinNode.off(cc.Node.EventType.TOUCH_START, this.onSpinTouchStart, this);
+      this.btn_spinNode.off(cc.Node.EventType.TOUCH_END, this.onSpinTouchEnd, this);
+      this.btn_spinNode.off(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
+    }
+  }
+
   hideBigWin() {
     if (this.node_BigWinLayer) {
       this.node_BigWinLayer.active = false;
