@@ -477,7 +477,7 @@ export default class GameManager extends cc.Component {
       }
 
       if (this.autoSpinCount === -1) {
-        this.label_spinBtn.string = "∞"; // 無限符號
+        this.label_spinBtn.string = "infinite";
       } else if (this.autoSpinCount > 0) {
         this.label_spinBtn.string = this.autoSpinCount.toString();
       }
@@ -492,7 +492,17 @@ export default class GameManager extends cc.Component {
   forceWinD() { this.triggerTestWin(SymbolType.D); }
 
   private triggerTestWin(symbol: SymbolType) {
-    if (this.state !== GameState.IDLE) return;
+    // 檢查1：目前正處於自動轉輪循環中 (無論是無限轉還是有剩餘次數)
+    if (this.autoSpinCount !== 0) {
+      this.showIOSAlert("請先點擊主畫面的 Spin 按鈕終止「自動旋轉」後，再進行大獎測試！");
+      return;
+    }
+
+    // 檢查2：目前是單次旋轉，但轉輪或是中獎動畫還在進行中
+    if (this.state !== GameState.IDLE) {
+      this.showIOSAlert("轉輪或動畫正在進行中！\n請等這局完全結束後，再進行大獎測試！");
+      return;
+    }
 
     // 構建一個必定在中線連成一線的結果陣列
     // 3輪，每輪傳入 [上, 中, 下]，我們讓中間全部都是我們指定的 symbol
@@ -503,5 +513,66 @@ export default class GameManager extends cc.Component {
     ];
 
     this.onSpinClick(); // 直接模擬按下旋轉來啟動
+  }
+
+  // ================= 網頁端漂亮 iOS 提示窗 =================
+  private showIOSAlert(message: string) {
+    if (!cc.sys.isBrowser) {
+      cc.log("Alert: " + message);
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    // 背景稍微變暗
+    overlay.style.backgroundColor = 'rgba(0,0,0,0.4)';
+    overlay.style.display = 'flex';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.zIndex = '999999';
+    overlay.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+    const alertBox = document.createElement('div');
+    alertBox.style.backgroundColor = 'rgba(255,255,255,0.85)';
+    // 蘋果著名的毛玻璃特效
+    alertBox.style.backdropFilter = 'blur(20px)';
+    (alertBox.style as any).webkitBackdropFilter = 'blur(20px)';
+    alertBox.style.borderRadius = '14px';
+    alertBox.style.width = '270px';
+    alertBox.style.textAlign = 'center';
+    alertBox.style.display = 'flex';
+    alertBox.style.flexDirection = 'column';
+    alertBox.style.boxShadow = '0 4px 24px rgba(0,0,0,0.2)';
+
+    const content = document.createElement('div');
+    content.style.padding = '20px 16px';
+    content.style.fontSize = '13px';
+    content.style.color = '#000';
+    content.style.lineHeight = '1.4';
+    // 塞入標題與我們自定義的內文
+    content.innerHTML = `<strong style="font-size: 17px; display: block; margin-bottom: 5px;">提示</strong>${message.replace(/\n/g, '<br>')}`;
+
+    const btn = document.createElement('div');
+    btn.innerText = '好';
+    btn.style.borderTop = '1px solid rgba(60,60,67,0.36)';
+    btn.style.color = '#007AFF';
+    btn.style.fontSize = '17px';
+    btn.style.fontWeight = '600';
+    btn.style.padding = '12px';
+    btn.style.cursor = 'pointer';
+
+    // 點擊後直接消滅 DOM 節點
+    btn.onclick = () => {
+      document.body.removeChild(overlay);
+    };
+
+    alertBox.appendChild(content);
+    alertBox.appendChild(btn);
+    overlay.appendChild(alertBox);
+    document.body.appendChild(overlay);
   }
 }
