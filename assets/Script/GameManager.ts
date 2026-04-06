@@ -102,6 +102,11 @@ export default class GameManager extends cc.Component {
       this.btn_spinNode.on(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
     }
 
+    // 註冊全局觸控監聽（使用 Capture 階段，確保能最先攔截到全螢幕任意點擊）
+    if (cc.Canvas.instance && cc.Canvas.instance.node) {
+      cc.Canvas.instance.node.on(cc.Node.EventType.TOUCH_START, this.onGlobalTouch, this, true);
+    }
+
     // 初始化確認關閉粒子
     if (this.spinParticle) {
       this.spinParticle.stopSystem();
@@ -114,6 +119,28 @@ export default class GameManager extends cc.Component {
       this.btn_spinNode.off(cc.Node.EventType.TOUCH_END, this.onSpinTouchEnd, this);
       this.btn_spinNode.off(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
     }
+
+    // 將全局事件也註銷
+    if (cc.Canvas.instance && cc.Canvas.instance.node) {
+      cc.Canvas.instance.node.off(cc.Node.EventType.TOUCH_START, this.onGlobalTouch, this, true);
+    }
+  }
+
+  // ================= 觸控與選單控制 =================
+  private onGlobalTouch(event: cc.Event.EventTouch) {
+    if (!this.node_AutoSpinMenu || !this.node_AutoSpinMenu.active) return;
+
+    let targetNode = event.target as cc.Node;
+
+    // 排除點擊自己 (Spin 按鈕)，讓它走自己該走的流程
+    if (this.btn_spinNode && (targetNode === this.btn_spinNode || targetNode.isChildOf(this.btn_spinNode))) return;
+
+    // 排除點擊選單自己與裡面的按鈕項目
+    if (targetNode === this.node_AutoSpinMenu || targetNode.isChildOf(this.node_AutoSpinMenu)) return;
+
+    // 都不是的話，就代表點在其他地方（空白處），自動收起選單
+    cc.log("點擊空白處，關閉局數菜單");
+    this.node_AutoSpinMenu.active = false;
   }
 
   hideBigWin() {
