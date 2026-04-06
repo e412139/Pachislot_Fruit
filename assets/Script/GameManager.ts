@@ -2,7 +2,7 @@ import Reel from "./Reel";
 import RNGService from "./RNGService";
 import PayoutService from "./PayoutService";
 import UIController from "./UIController";
-import { GameState } from "./Enums";
+import { GameState, SymbolType } from "./Enums";
 import CoinSpawner from "./CoinSpawner";
 
 const { ccclass, property } = cc._decorator;
@@ -41,10 +41,18 @@ export default class GameManager extends cc.Component {
   node_BigWinLayer: cc.Node = null;
 
   @property(cc.Node)
-  sprite_bigWin: cc.Node = null;
+  sprite_titleWin: cc.Node = null;
 
   @property(cc.Label)
   label_num: cc.Label = null;
+
+  @property(cc.SpriteFrame)
+  sprite_megaWin: cc.SpriteFrame = null;
+  @property(cc.SpriteFrame)
+  sprite_superWin: cc.SpriteFrame = null;
+  @property(cc.SpriteFrame)
+  sprite_bigWin: cc.SpriteFrame = null;
+
 
   private bigWinAudioID: number = -1;
 
@@ -57,6 +65,7 @@ export default class GameManager extends cc.Component {
   bet: number = 10;
 
   spinResult = null;
+  private riggedResult: SymbolType[][] = null; // 測試模式用的強制結果
 
   onLoad() {
     this.ui.updateCredit(this.credit);
@@ -73,7 +82,7 @@ export default class GameManager extends cc.Component {
     if (this.node_BigWinLayer) {
       this.node_BigWinLayer.active = false;
     }
-    if (this.sprite_bigWin) cc.Tween.stopAllByTarget(this.sprite_bigWin);
+    if (this.sprite_titleWin) cc.Tween.stopAllByTarget(this.sprite_titleWin);
 
     if (this.coinSpawner) {
       this.coinSpawner.stopContinuousSpawning();
@@ -142,17 +151,28 @@ export default class GameManager extends cc.Component {
     }
   }
 
-  showBigWin(coinsWon: number) {
+  showBigWin(coinsWon: number, multiplier: number) {
     if (!this.node_BigWinLayer) return;
 
     // 1. 顯示大框架
     this.node_BigWinLayer.active = true;
 
-    // 2. 字體彈跳出現
-    if (this.sprite_bigWin) {
-      cc.Tween.stopAllByTarget(this.sprite_bigWin);
-      this.sprite_bigWin.scale = 0; // 先縮小到0
-      cc.tween(this.sprite_bigWin)
+    // 2. 字體依據倍率替換圖片並彈跳出現
+    if (this.sprite_titleWin) {
+      let spriteComp = this.sprite_titleWin.getComponent(cc.Sprite);
+      if (spriteComp) {
+        if (multiplier >= 50) {
+          spriteComp.spriteFrame = this.sprite_superWin;
+        } else if (multiplier >= 20) {
+          spriteComp.spriteFrame = this.sprite_megaWin;
+        } else {
+          spriteComp.spriteFrame = this.sprite_bigWin;
+        }
+      }
+
+      cc.Tween.stopAllByTarget(this.sprite_titleWin);
+      this.sprite_titleWin.scale = 0; // 先縮小到0
+      cc.tween(this.sprite_titleWin)
         .to(0.4, { scale: 1.2 }, { easing: 'backOut' }) // 放大並有點彈性超出
         .to(0.2, { scale: 1.0 }) // 縮回正常大小
         .start();
@@ -191,6 +211,11 @@ export default class GameManager extends cc.Component {
             cc.audioEngine.stopEffect(this.bigWinAudioID);
             this.bigWinAudioID = -1;
           }
+
+          // 動畫播放結束後（此時滿 2 秒），稍微停留 0.5 秒讓玩家看清楚最終數字，接著自動移除 BigWin 畫布
+          this.scheduleOnce(() => {
+            this.hideBigWin();
+          }, 0.5);
         } else {
           let currentVal = Math.floor(coinsWon * ratio);
           this.label_num.string = currentVal.toLocaleString();
@@ -223,8 +248,14 @@ export default class GameManager extends cc.Component {
     cc.log("🎬 startSpin() called");
     this.state = GameState.SPINNING;
 
-    this.spinResult = this.rng.getSpinResult();
-    cc.log("🎲 spinResult:", this.spinResult);
+    if (this.riggedResult) {
+      this.spinResult = this.riggedResult;
+      this.riggedResult = null; // 用完就清空
+      cc.log("🎲 [TEST MODE] Rigged spinResult:", this.spinResult);
+    } else {
+      this.spinResult = this.rng.getSpinResult();
+      cc.log("🎲 spinResult:", this.spinResult);
+    }
 
     this.reels.forEach(r => r.spin());
 
@@ -302,7 +333,7 @@ export default class GameManager extends cc.Component {
       // 如果贏分倍數 >= 10，視為大獎
       if (totalWinMultipliers >= 10) {
         // 觸發大獎彈窗跑分與音效等動畫
-        this.showBigWin(coinsWon);
+        this.showBigWin(coinsWon, totalWinMultipliers);
       } else {
         // 一般小獎，只播放普通的贏分音效（單次）
         if (this.fireAudio) {
@@ -317,5 +348,26 @@ export default class GameManager extends cc.Component {
 
     this.endSpinSequence(); // 一次spin結束後，將燈號還原到待機狀態
     this.state = GameState.IDLE;
+  }
+
+  // ================= 測試模式專用按鈕綁定區 =================
+
+  forceWinA() { this.triggerTestWin(SymbolType.A); }
+  forceWinB() { this.triggerTestWin(SymbolType.B); }
+  forceWinC() { this.triggerTestWin(SymbolType.C); }
+  forceWinD() { this.triggerTestWin(SymbolType.D); }
+
+  private triggerTestWin(symbol: SymbolType) {
+    if (this.state !== GameState.IDLE) return;
+
+    // 構建一個必定在中線連成一線的結果陣列
+    // 3輪，每輪傳入 [上, 中, 下]，我們讓中間全部都是我們指定的 symbol
+    this.riggedResult = [
+      [SymbolType.C, symbol, SymbolType.B], // 第1輪
+      [SymbolType.A, symbol, SymbolType.C], // 第2輪
+      [SymbolType.D, symbol, SymbolType.A]  // 第3輪
+    ];
+
+    this.onSpinClick(); // 直接模擬按下旋轉來啟動
   }
 }
