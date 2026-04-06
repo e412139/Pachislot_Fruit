@@ -139,7 +139,7 @@ export default class GameManager extends cc.Component {
     if (targetNode === this.node_AutoSpinMenu || targetNode.isChildOf(this.node_AutoSpinMenu)) return;
 
     // 都不是的話，就代表點在其他地方（空白處），自動收起選單
-    cc.log("點擊空白處，關閉局數菜單");
+    cc.log("點擊空白處，關閉局數選單");
     this.node_AutoSpinMenu.active = false;
   }
 

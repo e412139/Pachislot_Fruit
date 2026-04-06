@@ -63,4 +63,11 @@ export default class UIController extends cc.Component {
       this.node_webViewInfo.active = false;
     }
   }
+
+  // ==== 場景切換 ====
+
+  backToLobby() {
+    cc.log("🚀 返回大廳場景 (Lobby)");
+    cc.director.loadScene("Lobby");
+  }
 }
