@@ -21,19 +21,19 @@ export default class CoinSpawner extends cc.Component {
         }
     }
 
-    spawnBurstSequence() {
+    startContinuousSpawning() {
         this.unscheduleAllCallbacks();
-
         let wave = 0;
-
         this.schedule(() => {
-            // 每波越來越多
-            let count = 10 + wave * 5;
-
+            // 每波越來越多，最高加到 30
+            let count = Math.min(30, 10 + wave * 5);
             this.spawnBurst(count);
             wave++;
+        }, 0.08); // 無限重複直到被 unschedule
+    }
 
-        }, 0.08, 6); // 更快、更密集
+    stopContinuousSpawning() {
+        this.unscheduleAllCallbacks();
     }
 
     spawnOne() {

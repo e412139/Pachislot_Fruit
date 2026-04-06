@@ -28,6 +28,9 @@ export default class GameManager extends cc.Component {
   @property(cc.AudioClip)
   fireAudio: cc.AudioClip = null;
 
+  @property(cc.AudioClip)
+  bigWinAudio: cc.AudioClip = null;
+
   @property(cc.Label)
   winNumLabel: cc.Label = null;
 
@@ -42,6 +45,8 @@ export default class GameManager extends cc.Component {
 
   @property(cc.Label)
   label_num: cc.Label = null;
+
+  private bigWinAudioID: number = -1;
 
   state: GameState = GameState.IDLE;
 
@@ -69,6 +74,14 @@ export default class GameManager extends cc.Component {
       this.node_BigWinLayer.active = false;
     }
     if (this.sprite_bigWin) cc.Tween.stopAllByTarget(this.sprite_bigWin);
+
+    if (this.coinSpawner) {
+      this.coinSpawner.stopContinuousSpawning();
+    }
+    if (this.bigWinAudioID !== -1) {
+      cc.audioEngine.stopEffect(this.bigWinAudioID);
+      this.bigWinAudioID = -1;
+    }
   }
 
   resetWinFireNodes() {
@@ -145,26 +158,46 @@ export default class GameManager extends cc.Component {
         .start();
     }
 
-    // 3. 數字跑分滾動
-    if (this.label_num) {
-      this.label_num.string = "0";
-      let scoreObj = { value: 0 };
-      cc.Tween.stopAllByTarget(scoreObj);
-      cc.tween(scoreObj)
-        .to(2.0, { value: coinsWon }, {
-          progress: (start, end, current, ratio) => {
-            let currentVal = Math.floor(start + (end - start) * ratio);
-            this.label_num.string = currentVal.toLocaleString();
-            return start + (end - start) * ratio;
-          }
-        })
-        .start();
+    // 3. 觸發噴金幣 (若有綁定) 持續噴發
+    if (this.coinSpawner) {
+      this.coinSpawner.startContinuousSpawning();
     }
 
-    // 4. 觸發噴金幣 (若有綁定)
-    if (this.coinSpawner) {
-      this.coinSpawner.spawnBurst(30);
-      this.coinSpawner.spawnBurstSequence();
+    // 4. 重複播放大獎音效
+    if (this.bigWinAudio && this.bigWinAudioID === -1) {
+      this.bigWinAudioID = cc.audioEngine.playEffect(this.bigWinAudio, true);
+    }
+
+    // 5. 數字跑分滾動
+    if (this.label_num) {
+      this.label_num.string = "0";
+
+      let duration = 2.0;
+      let startTime = cc.director.getTotalTime();
+
+      let counterCallback = () => {
+        let now = cc.director.getTotalTime();
+        let ratio = (now - startTime) / (duration * 1000);
+
+        if (ratio >= 1.0) {
+          this.label_num.string = coinsWon.toLocaleString();
+          this.unschedule(counterCallback);
+
+          // 滾到指定數字時：停止噴發金幣與停止循環音效
+          if (this.coinSpawner) {
+            this.coinSpawner.stopContinuousSpawning();
+          }
+          if (this.bigWinAudioID !== -1) {
+            cc.audioEngine.stopEffect(this.bigWinAudioID);
+            this.bigWinAudioID = -1;
+          }
+        } else {
+          let currentVal = Math.floor(coinsWon * ratio);
+          this.label_num.string = currentVal.toLocaleString();
+        }
+      };
+
+      this.schedule(counterCallback, 0); // 每幀執行
     }
   }
   onSpinClick() {
@@ -245,8 +278,6 @@ export default class GameManager extends cc.Component {
       if (win > 0) {
         cc.log(`🎉 Line ${i} won ${win}x! Line:`, lines[i]);
         totalWinMultipliers += win;
-        this.coinSpawner.spawnBurst(30);
-        this.coinSpawner.spawnBurstSequence();
 
         // 觸發中獎的圖標閃爍
         let positions = linePositions[i];
@@ -267,12 +298,17 @@ export default class GameManager extends cc.Component {
       if (this.winNumLabel) {
         this.winNumLabel.string = coinsWon.toLocaleString(); // 顯示贏分數值 (含千分位)
       }
-      if (this.fireAudio) {
-        cc.audioEngine.playEffect(this.fireAudio, false); // 播放音效
-      }
 
-      // 觸發大獎彈窗跑分動畫
-      this.showBigWin(coinsWon);
+      // 如果贏分倍數 >= 10，視為大獎
+      if (totalWinMultipliers >= 10) {
+        // 觸發大獎彈窗跑分與音效等動畫
+        this.showBigWin(coinsWon);
+      } else {
+        // 一般小獎，只播放普通的贏分音效（單次）
+        if (this.fireAudio) {
+          cc.audioEngine.playEffect(this.fireAudio, false);
+        }
+      }
 
       cc.log(`🎉 Total Win! You won ${coinsWon} credits (${totalWinMultipliers}x)`);
     }
