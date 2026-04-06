@@ -19,9 +19,6 @@ export default class GameManager extends cc.Component {
   @property([cc.Node])
   lightNodes: cc.Node[] = [];
 
-  @property([cc.Node])
-  winFireNodes: cc.Node[] = [];
-
   @property(cc.AudioClip)
   betButtonAudio: cc.AudioClip = null;
 
@@ -53,6 +50,23 @@ export default class GameManager extends cc.Component {
   @property(cc.SpriteFrame)
   sprite_bigWin: cc.SpriteFrame = null;
 
+  @property(cc.Node)
+  btn_spinNode: cc.Node = null; // 綁定那個圓圓的大 Spin 按鈕，用來掛載原生觸控(長按)事件
+
+  @property(cc.ParticleSystem)
+  spinParticle: cc.ParticleSystem = null; // 粒子特效元件，用來控制開始噴發或停止
+
+  @property(cc.Node)
+  node_AutoSpinMenu: cc.Node = null; // 自動旋轉的次數選單
+
+  @property(cc.Node)
+  label_spintitle: cc.Node = null; // 原本大按鈕上的 "開始" 等預設文字節點
+
+  @property(cc.Label)
+  label_spinBtn: cc.Label = null; // 剛剛新建的 label_runLoop
+
+  private isLongPress: boolean = false;
+  private autoSpinCount: number = 0; // 剩餘自動旋轉次數，-1 表無限
 
   private bigWinAudioID: number = -1;
 
@@ -70,11 +84,27 @@ export default class GameManager extends cc.Component {
   onLoad() {
     this.ui.updateCredit(this.credit);
     this.endSpinSequence();
-    this.resetWinFireNodes();
     this.hideBigWin(); // 初始時隱藏 BigWin
+    this.updateSpinButtonUI(); // 初始化按鈕文字
 
     if (this.winNumLabel) {
       this.winNumLabel.string = "";
+    }
+
+    if (this.node_AutoSpinMenu) {
+      this.node_AutoSpinMenu.active = false;
+    }
+
+    // 掛載長按觸發機制
+    if (this.btn_spinNode) {
+      this.btn_spinNode.on(cc.Node.EventType.TOUCH_START, this.onSpinTouchStart, this);
+      this.btn_spinNode.on(cc.Node.EventType.TOUCH_END, this.onSpinTouchEnd, this);
+      this.btn_spinNode.on(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
+    }
+
+    // 初始化確認關閉粒子
+    if (this.spinParticle) {
+      this.spinParticle.stopSystem();
     }
   }
 
@@ -93,14 +123,6 @@ export default class GameManager extends cc.Component {
     }
   }
 
-  resetWinFireNodes() {
-    this.winFireNodes.forEach(node => {
-      if (node) {
-        cc.Tween.stopAllByTarget(node);
-        node.opacity = 0; // 贏分特效平時隱藏
-      }
-    });
-  }
 
   endSpinSequence() {
     this.lightNodes.forEach(node => { if (node) cc.Tween.stopAllByTarget(node); });
@@ -110,8 +132,6 @@ export default class GameManager extends cc.Component {
 
   startSpinSequence() {
     // onSpinClick 狀態
-
-    this.resetWinFireNodes(); // 開始新的一局時重置贏分特效
     this.hideBigWin(); // 開始新局時隱藏上一局的 BigWin
 
     if (this.winNumLabel) {
@@ -134,17 +154,6 @@ export default class GameManager extends cc.Component {
         delayTime += interval;
         cc.tween(this.lightNodes[i])
           .delay(delayTime)
-          .to(0.1, { opacity: 255 }) // 0.1秒內變成全亮
-          .start();
-      }
-    }
-  }
-
-  startWinFireSequence() {
-    // 同時點亮所有 winFireNodes
-    for (let i = 0; i < this.winFireNodes.length; i++) {
-      if (this.winFireNodes[i]) {
-        cc.tween(this.winFireNodes[i])
           .to(0.1, { opacity: 255 }) // 0.1秒內變成全亮
           .start();
       }
@@ -230,6 +239,18 @@ export default class GameManager extends cc.Component {
     if (this.state !== GameState.IDLE) {
       cc.log("❌ Not in IDLE state, ignoring spin");
       return;
+    }
+
+    // 若還有自動旋轉次數，但在普通點擊時，表示手動干預，中止自動旋轉
+    if (this.autoSpinCount > 0 || this.autoSpinCount === -1) {
+      if (!this.isLongPress && this.autoSpinCount > 0) {
+        cc.log("手動點擊，中止自動旋轉狀態");
+      }
+    }
+
+    // 關閉原本可能開著的選單
+    if (this.node_AutoSpinMenu) {
+      this.node_AutoSpinMenu.active = false;
     }
 
     // 播放下注/旋轉按鈕的音效
@@ -324,13 +345,11 @@ export default class GameManager extends cc.Component {
       let coinsWon = totalWinMultipliers * this.bet;
       this.credit += coinsWon;
       this.ui.playWin();
-      this.startWinFireSequence(); // 觸發贏分特效
 
       if (this.winNumLabel) {
         this.winNumLabel.string = coinsWon.toLocaleString(); // 顯示贏分數值 (含千分位)
       }
 
-      // 如果贏分倍數 >= 10，視為大獎
       if (totalWinMultipliers >= 10) {
         // 觸發大獎彈窗跑分與音效等動畫
         this.showBigWin(coinsWon, totalWinMultipliers);
@@ -348,6 +367,121 @@ export default class GameManager extends cc.Component {
 
     this.endSpinSequence(); // 一次spin結束後，將燈號還原到待機狀態
     this.state = GameState.IDLE;
+
+    // ======== 自動旋轉 (Auto Spin) 判定邏輯 ========
+    if (this.autoSpinCount !== 0) {
+      if (this.autoSpinCount > 0) {
+        this.autoSpinCount--;
+        this.updateSpinButtonUI(); // 扣除局數後更新介面
+      }
+      cc.log(`🔄 Auto Spin 準備進行下一把，剩餘次數: ${this.autoSpinCount === -1 ? '無限' : this.autoSpinCount}`);
+
+      let nextSpinDelay = 1.0; // 預設沒中獎的下一局等待時間
+
+      if (totalWinMultipliers > 0) {
+        if (totalWinMultipliers >= 10) {
+          nextSpinDelay = 3.0; // 大獎演出較久 (跑分2秒 + 停留0.5秒 + 關閉)，抓 3 秒接下一局
+        } else {
+          nextSpinDelay = 1.6; // 小獎稍微多停一會讓玩家看字
+        }
+      }
+
+      // 依據是否中獎停滯不同秒數後再接下一把
+      this.scheduleOnce(() => {
+        if (this.state === GameState.IDLE && this.autoSpinCount !== 0) {
+          this.onSpinClick();
+        }
+      }, nextSpinDelay);
+    }
+  }
+
+  // ================= 觸控長按事件與特效邏輯 =================
+
+  onSpinTouchStart() {
+    if (this.state !== GameState.IDLE) return;
+    this.isLongPress = false;
+
+    // 按下持續 0.5 秒則觸發自動旋轉選單（並在裡面播放特效）
+    this.scheduleOnce(this.triggerLongPressMenu, 0.5);
+  }
+
+  onSpinTouchEnd() {
+    this.unschedule(this.triggerLongPressMenu);
+
+    if (this.spinParticle) {
+      this.spinParticle.stopSystem(); // 結束長按集氣，停止特效
+    }
+
+    if (this.state !== GameState.IDLE) return;
+
+    if (!this.isLongPress) {
+      // 判斷只是短按：取消任何進行中的 autoSpin，並且發起一次正常旋轉
+      this.autoSpinCount = 0;
+      this.updateSpinButtonUI();
+      this.onSpinClick();
+    }
+  }
+
+  onSpinTouchCancel() {
+    this.unschedule(this.triggerLongPressMenu);
+    if (this.spinParticle) {
+      this.spinParticle.stopSystem();
+    }
+  }
+
+  triggerLongPressMenu() {
+    this.isLongPress = true;
+    cc.log("👉 Trigger Long Press (Auto Spin Menu)");
+
+    // 長按達標，開始噴發粒子特效
+    if (this.spinParticle) {
+      this.spinParticle.resetSystem();
+    }
+
+    // 展開自動旋轉選單
+    if (this.node_AutoSpinMenu) {
+      this.node_AutoSpinMenu.active = true;
+    }
+  }
+
+  // 供 Auto Spin Menu 裡的各個選項按鈕 (Click Events) 呼叫
+  onAutoSpinSelected(event: any, customEventData: string) {
+    let count = parseInt(customEventData);
+    this.autoSpinCount = count;
+
+    if (this.node_AutoSpinMenu) {
+      this.node_AutoSpinMenu.active = false;
+    }
+
+    this.updateSpinButtonUI(); // 設定為所選局數後更新介面
+
+    cc.log(`⚙️ Auto Spin Mode Started: ${count === -1 ? 'Infinity' : count}`);
+    this.onSpinClick(); // 馬上開始第一把
+  }
+
+  // 更新 Spin 按鈕介面上的文字與顯示狀態
+  updateSpinButtonUI() {
+    if (!this.label_spinBtn) return;
+
+    if (this.autoSpinCount === 0) {
+      // 狀態歸零：關閉剩下局數，還原預設文字
+      this.label_spinBtn.node.active = false;
+      if (this.label_spintitle) {
+        this.label_spintitle.active = true;
+      }
+    } else {
+      // 自動旋轉中：開啟局數，隱藏預設文字
+      this.label_spinBtn.node.active = true;
+      if (this.label_spintitle) {
+        this.label_spintitle.active = false;
+      }
+
+      if (this.autoSpinCount === -1) {
+        this.label_spinBtn.string = "∞"; // 無限符號
+      } else if (this.autoSpinCount > 0) {
+        this.label_spinBtn.string = this.autoSpinCount.toString();
+      }
+    }
   }
 
   // ================= 測試模式專用按鈕綁定區 =================

@@ -7,7 +7,7 @@ export default class UIController extends cc.Component {
   creditLabel: cc.Label = null;
 
   updateCredit(value: number) {
-    this.creditLabel.string = `Credit: ${value.toLocaleString()}`;
+    this.creditLabel.string = `Score: ${value.toLocaleString()}`;
   }
 
   playWin() {
