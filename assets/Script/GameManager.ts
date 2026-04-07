@@ -28,27 +28,8 @@ export default class GameManager extends cc.Component {
   @property(cc.AudioClip)
   bigWinAudio: cc.AudioClip = null;
 
-  @property(cc.Label)
-  winNumLabel: cc.Label = null;
-
   @property(CoinSpawner)
   coinSpawner: CoinSpawner = null;
-
-  @property(cc.Node)
-  node_BigWinLayer: cc.Node = null;
-
-  @property(cc.Node)
-  sprite_titleWin: cc.Node = null;
-
-  @property(cc.Label)
-  label_num: cc.Label = null;
-
-  @property(cc.SpriteFrame)
-  sprite_megaWin: cc.SpriteFrame = null;
-  @property(cc.SpriteFrame)
-  sprite_superWin: cc.SpriteFrame = null;
-  @property(cc.SpriteFrame)
-  sprite_bigWin: cc.SpriteFrame = null;
 
   @property(cc.Node)
   btn_spinNode: cc.Node = null; // 綁定那個圓圓的大 Spin 按鈕，用來掛載原生觸控(長按)事件
@@ -56,14 +37,6 @@ export default class GameManager extends cc.Component {
   @property(cc.ParticleSystem)
   spinParticle: cc.ParticleSystem = null; // 粒子特效元件，用來控制開始噴發或停止
 
-  @property(cc.Node)
-  node_AutoSpinMenu: cc.Node = null; // 自動旋轉的次數選單
-
-  @property(cc.Node)
-  label_spintitle: cc.Node = null; // 原本大按鈕上的 "開始" 等預設文字節點
-
-  @property(cc.Label)
-  label_spinBtn: cc.Label = null; // 剛剛新建的 label_runLoop
 
   private isLongPress: boolean = false;
   private autoSpinCount: number = 0; // 剩餘自動旋轉次數，-1 表無限
@@ -84,16 +57,9 @@ export default class GameManager extends cc.Component {
   onLoad() {
     this.ui.updateScore(this.credit);
     this.endSpinSequence();
-    this.hideBigWin(); // 初始時隱藏 BigWin
-    this.updateSpinButtonUI(); // 初始化按鈕文字
-
-    if (this.winNumLabel) {
-      this.winNumLabel.string = "";
-    }
-
-    if (this.node_AutoSpinMenu) {
-      this.node_AutoSpinMenu.active = false;
-    }
+    this.ui.hideBigWinLayer(); // 初始時隱藏 BigWin
+    this.ui.updateSpinButton(this.autoSpinCount); // 初始化按鈕文字
+    this.ui.clearWinAmount(); // 清空贏分顯示
 
     // 掛載長按觸發機制
     if (this.btn_spinNode) {
@@ -102,10 +68,7 @@ export default class GameManager extends cc.Component {
       this.btn_spinNode.on(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
     }
 
-    // 註冊全局觸控監聽（使用 Capture 階段，確保能最先攔截到全螢幕任意點擊）
-    if (cc.Canvas.instance && cc.Canvas.instance.node) {
-      cc.Canvas.instance.node.on(cc.Node.EventType.TOUCH_START, this.onGlobalTouch, this, true);
-    }
+
 
     // 初始化確認關閉粒子
     if (this.spinParticle) {
@@ -120,35 +83,10 @@ export default class GameManager extends cc.Component {
       this.btn_spinNode.off(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
     }
 
-    // 將全局事件也註銷
-    if (cc.Canvas.instance && cc.Canvas.instance.node) {
-      cc.Canvas.instance.node.off(cc.Node.EventType.TOUCH_START, this.onGlobalTouch, this, true);
-    }
   }
 
-  // ================= 觸控與選單控制 =================
-  private onGlobalTouch(event: cc.Event.EventTouch) {
-    if (!this.node_AutoSpinMenu || !this.node_AutoSpinMenu.active) return;
-
-    let targetNode = event.target as cc.Node;
-
-    // 排除點擊自己 (Spin 按鈕)，讓它走自己該走的流程
-    if (this.btn_spinNode && (targetNode === this.btn_spinNode || targetNode.isChildOf(this.btn_spinNode))) return;
-
-    // 排除點擊選單自己與裡面的按鈕項目
-    if (targetNode === this.node_AutoSpinMenu || targetNode.isChildOf(this.node_AutoSpinMenu)) return;
-
-    // 都不是的話，就代表點在其他地方（空白處），自動收起選單
-    cc.log("點擊空白處，關閉局數選單");
-    this.node_AutoSpinMenu.active = false;
-  }
-
-  hideBigWin() {
-    if (this.node_BigWinLayer) {
-      this.node_BigWinLayer.active = false;
-    }
-    if (this.sprite_titleWin) cc.Tween.stopAllByTarget(this.sprite_titleWin);
-
+  /** 停止大獎特效（金幣噴發 + 音效），GameManager 專屬的遊戲效果層 */
+  private stopBigWinEffects() {
     if (this.coinSpawner) {
       this.coinSpawner.stopContinuousSpawning();
     }
@@ -158,7 +96,6 @@ export default class GameManager extends cc.Component {
     }
   }
 
-
   endSpinSequence() {
     this.lightNodes.forEach(node => { if (node) cc.Tween.stopAllByTarget(node); });
 
@@ -167,11 +104,9 @@ export default class GameManager extends cc.Component {
 
   startSpinSequence() {
     // onSpinClick 狀態
-    this.hideBigWin(); // 開始新局時隱藏上一局的 BigWin
-
-    if (this.winNumLabel) {
-      this.winNumLabel.string = ""; // 清除贏分字樣
-    }
+    this.stopBigWinEffects(); // 開始新局時停止上一局的金幣/音效
+    this.ui.hideBigWinLayer(); // 開始新局時隱藏上一局的 BigWin
+    this.ui.clearWinAmount(); // 清除贏分字樣
 
     this.lightNodes.forEach(node => {
       if (node) {
@@ -195,78 +130,21 @@ export default class GameManager extends cc.Component {
     }
   }
 
+  /** 大獎演出協調者：委派 UI 播動畫，自己管金幣與音效 */
   showBigWin(coinsWon: number, multiplier: number) {
-    if (!this.node_BigWinLayer) return;
+    // 1. 委派 UI 播放視覺動畫（圖片切換 + Tween + 跑分），跑分結束時 callback 停止特效
+    this.ui.showBigWinAnimation(coinsWon, multiplier, () => {
+      this.stopBigWinEffects();
+    });
 
-    // 1. 顯示大框架
-    this.node_BigWinLayer.active = true;
-
-    // 2. 字體依據倍率替換圖片並彈跳出現
-    if (this.sprite_titleWin) {
-      let spriteComp = this.sprite_titleWin.getComponent(cc.Sprite);
-      if (spriteComp) {
-        if (multiplier >= 50) {
-          spriteComp.spriteFrame = this.sprite_superWin;
-        } else if (multiplier >= 20) {
-          spriteComp.spriteFrame = this.sprite_megaWin;
-        } else {
-          spriteComp.spriteFrame = this.sprite_bigWin;
-        }
-      }
-
-      cc.Tween.stopAllByTarget(this.sprite_titleWin);
-      this.sprite_titleWin.scale = 0; // 先縮小到0
-      cc.tween(this.sprite_titleWin)
-        .to(0.4, { scale: 1.2 }, { easing: 'backOut' }) // 放大並有點彈性超出
-        .to(0.2, { scale: 1.0 }) // 縮回正常大小
-        .start();
-    }
-
-    // 3. 觸發噴金幣 (若有綁定) 持續噴發
+    // 2. 觸發噴金幣
     if (this.coinSpawner) {
       this.coinSpawner.startContinuousSpawning();
     }
 
-    // 4. 重複播放大獎音效
+    // 3. 重複播放大獎音效
     if (this.bigWinAudio && this.bigWinAudioID === -1) {
       this.bigWinAudioID = cc.audioEngine.playEffect(this.bigWinAudio, true);
-    }
-
-    // 5. 數字跑分滾動
-    if (this.label_num) {
-      this.label_num.string = "0";
-
-      let duration = 2.0;
-      let startTime = cc.director.getTotalTime();
-
-      let counterCallback = () => {
-        let now = cc.director.getTotalTime();
-        let ratio = (now - startTime) / (duration * 1000);
-
-        if (ratio >= 1.0) {
-          this.label_num.string = coinsWon.toLocaleString();
-          this.unschedule(counterCallback);
-
-          // 滾到指定數字時：停止噴發金幣與停止循環音效
-          if (this.coinSpawner) {
-            this.coinSpawner.stopContinuousSpawning();
-          }
-          if (this.bigWinAudioID !== -1) {
-            cc.audioEngine.stopEffect(this.bigWinAudioID);
-            this.bigWinAudioID = -1;
-          }
-
-          // 動畫播放結束後（此時滿 2 秒），稍微停留 0.5 秒讓玩家看清楚最終數字，接著自動移除 BigWin 畫布
-          this.scheduleOnce(() => {
-            this.hideBigWin();
-          }, 0.5);
-        } else {
-          let currentVal = Math.floor(coinsWon * ratio);
-          this.label_num.string = currentVal.toLocaleString();
-        }
-      };
-
-      this.schedule(counterCallback, 0); // 每幀執行
     }
   }
   onSpinClick() {
@@ -284,9 +162,7 @@ export default class GameManager extends cc.Component {
     }
 
     // 關閉原本可能開著的選單
-    if (this.node_AutoSpinMenu) {
-      this.node_AutoSpinMenu.active = false;
-    }
+    this.ui.hideAutoSpinMenu();
 
     // 播放下注/旋轉按鈕的音效
     if (this.betButtonAudio) {
@@ -381,9 +257,7 @@ export default class GameManager extends cc.Component {
       this.credit += coinsWon;
       this.ui.playWin();
 
-      if (this.winNumLabel) {
-        this.winNumLabel.string = coinsWon.toLocaleString(); // 顯示贏分數值 (含千分位)
-      }
+      this.ui.showWinAmount(coinsWon); // 顯示贏分數值 (含千分位)
 
       if (totalWinMultipliers >= 10) {
         // 觸發大獎彈窗跑分與音效等動畫
@@ -407,7 +281,7 @@ export default class GameManager extends cc.Component {
     if (this.autoSpinCount !== 0) {
       if (this.autoSpinCount > 0) {
         this.autoSpinCount--;
-        this.updateSpinButtonUI(); // 扣除局數後更新介面
+        this.ui.updateSpinButton(this.autoSpinCount); // 扣除局數後更新介面
       }
       cc.log(`🔄 Auto Spin 準備進行下一把，剩餘次數: ${this.autoSpinCount === -1 ? '無限' : this.autoSpinCount}`);
 
@@ -452,7 +326,7 @@ export default class GameManager extends cc.Component {
     if (!this.isLongPress) {
       // 判斷只是短按：取消任何進行中的 autoSpin，並且發起一次正常旋轉
       this.autoSpinCount = 0;
-      this.updateSpinButtonUI();
+      this.ui.updateSpinButton(0);
       this.onSpinClick();
     }
   }
@@ -474,9 +348,7 @@ export default class GameManager extends cc.Component {
     }
 
     // 展開自動旋轉選單
-    if (this.node_AutoSpinMenu) {
-      this.node_AutoSpinMenu.active = true;
-    }
+    this.ui.showAutoSpinMenu();
   }
 
   // 供 Auto Spin Menu 裡的各個選項按鈕 (Click Events) 呼叫
@@ -484,40 +356,14 @@ export default class GameManager extends cc.Component {
     let count = parseInt(customEventData);
     this.autoSpinCount = count;
 
-    if (this.node_AutoSpinMenu) {
-      this.node_AutoSpinMenu.active = false;
-    }
-
-    this.updateSpinButtonUI(); // 設定為所選局數後更新介面
+    this.ui.hideAutoSpinMenu();
+    this.ui.updateSpinButton(count); // 設定為所選局數後更新介面
 
     cc.log(`⚙️ Auto Spin Mode Started: ${count === -1 ? 'Infinity' : count}`);
     this.onSpinClick(); // 馬上開始第一把
   }
 
-  // 更新 Spin 按鈕介面上的文字與顯示狀態
-  updateSpinButtonUI() {
-    if (!this.label_spinBtn) return;
 
-    if (this.autoSpinCount === 0) {
-      // 狀態歸零：關閉剩下局數，還原預設文字
-      this.label_spinBtn.node.active = false;
-      if (this.label_spintitle) {
-        this.label_spintitle.active = true;
-      }
-    } else {
-      // 自動旋轉中：開啟局數，隱藏預設文字
-      this.label_spinBtn.node.active = true;
-      if (this.label_spintitle) {
-        this.label_spintitle.active = false;
-      }
-
-      if (this.autoSpinCount === -1) {
-        this.label_spinBtn.string = "infinite";
-      } else if (this.autoSpinCount > 0) {
-        this.label_spinBtn.string = this.autoSpinCount.toString();
-      }
-    }
-  }
 
   // ================= 測試模式專用按鈕綁定區 =================
 
@@ -529,13 +375,13 @@ export default class GameManager extends cc.Component {
   private triggerTestWin(symbol: SymbolType) {
     // 檢查1：目前正處於自動轉輪循環中 (無論是無限轉還是有剩餘次數)
     if (this.autoSpinCount !== 0) {
-      this.showIOSAlert("請先點擊主畫面的 Spin 按鈕終止「自動旋轉」後，再進行大獎測試！");
+      this.ui.showIOSAlert("請先點擊主畫面的 Spin 按鈕終止「自動旋轉」後，再進行大獎測試！");
       return;
     }
 
     // 檢查2：目前是單次旋轉，但轉輪或是中獎動畫還在進行中
     if (this.state !== GameState.IDLE) {
-      this.showIOSAlert("轉輪或動畫正在進行中！\n請等這局完全結束後，再進行大獎測試！");
+      this.ui.showIOSAlert("轉輪或動畫正在進行中！\n請等這局完全結束後，再進行大獎測試！");
       return;
     }
 
@@ -550,64 +396,4 @@ export default class GameManager extends cc.Component {
     this.onSpinClick(); // 直接模擬按下旋轉來啟動
   }
 
-  // ================= 網頁端漂亮 iOS 提示窗 =================
-  private showIOSAlert(message: string) {
-    if (!cc.sys.isBrowser) {
-      cc.log("Alert: " + message);
-      return;
-    }
-
-    const overlay = document.createElement('div');
-    overlay.style.position = 'absolute';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    // 背景稍微變暗
-    overlay.style.backgroundColor = 'rgba(0,0,0,0.4)';
-    overlay.style.display = 'flex';
-    overlay.style.justifyContent = 'center';
-    overlay.style.alignItems = 'center';
-    overlay.style.zIndex = '999999';
-    overlay.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-
-    const alertBox = document.createElement('div');
-    alertBox.style.backgroundColor = 'rgba(255,255,255,0.85)';
-    // 蘋果著名的毛玻璃特效
-    alertBox.style.backdropFilter = 'blur(20px)';
-    (alertBox.style as any).webkitBackdropFilter = 'blur(20px)';
-    alertBox.style.borderRadius = '14px';
-    alertBox.style.width = '270px';
-    alertBox.style.textAlign = 'center';
-    alertBox.style.display = 'flex';
-    alertBox.style.flexDirection = 'column';
-    alertBox.style.boxShadow = '0 4px 24px rgba(0,0,0,0.2)';
-
-    const content = document.createElement('div');
-    content.style.padding = '20px 16px';
-    content.style.fontSize = '13px';
-    content.style.color = '#000';
-    content.style.lineHeight = '1.4';
-    // 塞入標題與我們自定義的內文
-    content.innerHTML = `<strong style="font-size: 17px; display: block; margin-bottom: 5px;">提示</strong>${message.replace(/\n/g, '<br>')}`;
-
-    const btn = document.createElement('div');
-    btn.innerText = '好';
-    btn.style.borderTop = '1px solid rgba(60,60,67,0.36)';
-    btn.style.color = '#007AFF';
-    btn.style.fontSize = '17px';
-    btn.style.fontWeight = '600';
-    btn.style.padding = '12px';
-    btn.style.cursor = 'pointer';
-
-    // 點擊後直接消滅 DOM 節點
-    btn.onclick = () => {
-      document.body.removeChild(overlay);
-    };
-
-    alertBox.appendChild(content);
-    alertBox.appendChild(btn);
-    overlay.appendChild(alertBox);
-    document.body.appendChild(overlay);
-  }
 }
