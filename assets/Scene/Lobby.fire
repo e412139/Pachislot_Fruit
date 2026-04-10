@@ -87,10 +87,10 @@
     "_active": true,
     "_components": [
       {
-        "__id__": 24
+        "__id__": 25
       },
       {
-        "__id__": 25
+        "__id__": 26
       }
     ],
     "_prefab": null,
@@ -1107,7 +1107,11 @@
     "_grayMaterial": null,
     "duration": 0.1,
     "zoomScale": 1.2,
-    "clickEvents": [],
+    "clickEvents": [
+      {
+        "__id__": 24
+      }
+    ],
     "_N$interactable": true,
     "_N$enableAutoGrayEffect": false,
     "_N$transition": 2,
@@ -1176,6 +1180,16 @@
       "__id__": 18
     },
     "_id": "d0WYsPvBRJZ5gZwmJ2V+9z"
+  },
+  {
+    "__type__": "cc.ClickEvent",
+    "target": {
+      "__id__": 8
+    },
+    "component": "",
+    "_componentId": "218c6sBDLhFrbvH9J2WL1dy",
+    "handler": "enterGame",
+    "customEventData": ""
   },
   {
     "__type__": "cc.Canvas",
