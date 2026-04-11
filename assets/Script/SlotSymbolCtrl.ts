@@ -43,13 +43,13 @@ export default class SlotSymbolCtrl extends cc.Component {
     /** 播放中獎閃爍動畫（scale 彈跳 + opacity 閃爍） */
     playWinAnim() {
         cc.Tween.stopAllByTarget(this.node);
-        this.node.scale   = 1;
+        this.node.scale = 1;
         this.node.opacity = 255;
 
         cc.tween(this.node)
             .repeatForever(
                 cc.tween()
-                    .to(0.18, { scale: 1.2 },  { easing: 'backOut' })
+                    .to(0.18, { scale: 1.1 }, { easing: 'backOut' })
                     .to(0.18, { scale: 1.0 })
                     .to(0.12, { opacity: 60 })
                     .to(0.12, { opacity: 255 })
@@ -60,7 +60,7 @@ export default class SlotSymbolCtrl extends cc.Component {
     /** 停止中獎動畫，還原到正常狀態 */
     stopWinAnim() {
         cc.Tween.stopAllByTarget(this.node);
-        this.node.scale   = 1;
+        this.node.scale = 1;
         this.node.opacity = 255;
     }
 
@@ -68,7 +68,7 @@ export default class SlotSymbolCtrl extends cc.Component {
 
     private getSymbolName(id: SlotSymbolID): string {
         const names = ['液體', '藥草', '搗藥', '玻璃瓶', '蒸餾器',
-                       'TEN', 'J', 'Q', 'K', 'A', 'WILD', '⭐'];
+            'TEN', 'J', 'Q', 'K', 'A', 'WILD', '⭐'];
         return names[id] ?? '?';
     }
 }
