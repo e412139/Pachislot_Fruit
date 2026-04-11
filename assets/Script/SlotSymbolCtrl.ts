@@ -67,8 +67,8 @@ export default class SlotSymbolCtrl extends cc.Component {
     // ─── 私有工具 ────────────────────────────────────────────
 
     private getSymbolName(id: SlotSymbolID): string {
-        const names = ['液體', '藥草', '搗藥', '玻璃瓶', '蒸餾器',
-            'TEN', 'J', 'Q', 'K', 'A', 'WILD', '⭐'];
+        const names = ['S1', 'S2', 'S3', 'S4', 'S5',
+            'TEN', 'J', 'Q', 'K', 'A', 'WILD', '⭐', '空瓶'];
         return names[id] ?? '?';
     }
 }

@@ -13,6 +13,12 @@
 //   sprite_titleWin   — 大獎標題圖片節點
 //   label_num         — 大獎跑分 Label
 //   sprite_bigWin / sprite_megaWin / sprite_superWin — SpriteFrame 資源
+//   --- Free Game ---
+//   sprite_bg         — 背景圖片節點 (cc.Sprite)
+//   sprite_pot        — 鍋子圖片節點 (cc.Sprite)
+//   bg_normal / bg_freeGame   — 背景圖替換素材 (cc.SpriteFrame)
+//   pot_normal / pot_freeGame — 鍋子圖替換素材 (cc.SpriteFrame)
+//   node_magicCircle  — 魔法圈轉場特效節點 (內含發光或粒子)
 
 const { ccclass, property } = cc._decorator;
 
@@ -58,12 +64,60 @@ export default class SlotUICtrl extends cc.Component {
     @property(cc.SpriteFrame)
     sprite_superWin: cc.SpriteFrame = null;
 
+    @property(cc.Node)
+    node_rdTestMune: cc.Node = null;
+
+    // ─── Free Game 轉場與背景 ────────────────────────────────
+    @property(cc.Sprite)
+    sprite_bg: cc.Sprite = null;
+
+    @property(cc.Sprite)
+    sprite_pot: cc.Sprite = null;
+
+    @property(cc.SpriteFrame)
+    bg_normal: cc.SpriteFrame = null;
+
+    @property(cc.SpriteFrame)
+    bg_freeGame: cc.SpriteFrame = null;
+
+    @property(cc.SpriteFrame)
+    pot_normal: cc.SpriteFrame = null;
+
+    @property(cc.SpriteFrame)
+    pot_freeGame: cc.SpriteFrame = null;
+
+    @property(cc.Node)
+    node_magicCircle: cc.Node = null;
+
+    // ─── Free Game 專用 UI ────────────────────────────────────
+    @property(cc.Node)
+    node_fgCongratsLayout: cc.Node = null;
+
+    @property(cc.Label)
+    label_fgMultiplier: cc.Label = null;
+
+    @property(cc.Node)
+    node_fgMultiplierContainer: cc.Node = null; // 放倍數文字的外框
+
+    @property(cc.Prefab)
+    prefab_bottleFly: cc.Prefab = null; // 供飛行的空瓶碎片/圖案
+
+    @property(cc.Node)
+    node_fgTotalWinLayout: cc.Node = null; // FG 結算 Total Win 畫面
+
+    @property(cc.Label)
+    label_fgTotalWinScore: cc.Label = null; // FG 結算畫面的總分文字
+
     // ─── 生命週期 ────────────────────────────────────────────
 
     onLoad() {
         if (this.node_AutoSpinMenu) this.node_AutoSpinMenu.active = false;
-        if (this.node_BigWinLayer)  this.node_BigWinLayer.active  = false;
-        if (this.winLabel)          this.winLabel.string           = "";
+        if (this.node_BigWinLayer) this.node_BigWinLayer.active = false;
+        if (this.node_magicCircle) this.node_magicCircle.active = false;
+        if (this.node_fgCongratsLayout) this.node_fgCongratsLayout.active = false;
+        if (this.node_fgMultiplierContainer) this.node_fgMultiplierContainer.active = false;
+        if (this.node_fgTotalWinLayout) this.node_fgTotalWinLayout.active = false;
+        if (this.winLabel) this.winLabel.string = "";
 
         // 全域點擊：點到選單外部則自動關閉
         if (cc.Canvas.instance && cc.Canvas.instance.node) {
@@ -105,7 +159,7 @@ export default class SlotUICtrl extends cc.Component {
 
     hideBigWinLayer() {
         if (this.node_BigWinLayer) this.node_BigWinLayer.active = false;
-        if (this.sprite_titleWin)  cc.Tween.stopAllByTarget(this.sprite_titleWin);
+        if (this.sprite_titleWin) cc.Tween.stopAllByTarget(this.sprite_titleWin);
     }
 
     /**
@@ -125,27 +179,39 @@ export default class SlotUICtrl extends cc.Component {
         // 依倍率選標題圖片
         const spriteComp = this.sprite_titleWin.getComponent(cc.Sprite);
         if (spriteComp) {
-            if (multiplier >= 50 && this.sprite_superWin) {
+            if (multiplier >= 100 && this.sprite_superWin) {
                 spriteComp.spriteFrame = this.sprite_superWin;
-            } else if (multiplier >= 20 && this.sprite_megaWin) {
+            } else if (multiplier >= 50 && this.sprite_megaWin) {
                 spriteComp.spriteFrame = this.sprite_megaWin;
-            } else if (this.sprite_bigWin) {
+            } else if (multiplier >= 20 && this.sprite_bigWin) {
+                spriteComp.spriteFrame = this.sprite_bigWin;
+            } else if (this.sprite_bigWin) { // Fallback
                 spriteComp.spriteFrame = this.sprite_bigWin;
             }
         }
 
-        // 標題圖片彈出
+        // 標題圖片彈出 + 持續脈衝縮放 (Pulse Animation)
         cc.Tween.stopAllByTarget(this.sprite_titleWin);
         this.sprite_titleWin.scale = 0;
         cc.tween(this.sprite_titleWin)
             .to(0.4, { scale: 1.2 }, { easing: 'backOut' })
             .to(0.2, { scale: 1.0 })
+            .call(() => {
+                // 跑分期間不斷微微跳動
+                cc.tween(this.sprite_titleWin)
+                    .repeatForever(
+                        cc.tween()
+                            .to(0.3, { scale: 1.05 })
+                            .to(0.3, { scale: 1.0 })
+                    )
+                    .start();
+            })
             .start();
 
         // 跑分動畫（每幀更新）
         if (this.label_num) {
             this.label_num.string = "0";
-            const duration  = 2.0;
+            const duration = 2.0;
             const startTime = cc.director.getTotalTime();
 
             const counterFn = () => {
@@ -189,13 +255,165 @@ export default class SlotUICtrl extends cc.Component {
     }
 
     // ─── 私有：全域點擊關閉選單 ─────────────────────────────
+    private onRdTestBtnClick() {
+        this.node_rdTestMune.active = !this.node_rdTestMune.active;
+    }
 
     private onGlobalTouch(event: cc.Event.EventTouch) {
-        if (!this.node_AutoSpinMenu || !this.node_AutoSpinMenu.active) return;
         const target = event.target as cc.Node;
-        if (this.node_spinBtn &&
-            (target === this.node_spinBtn || target.isChildOf(this.node_spinBtn))) return;
-        if (target === this.node_AutoSpinMenu || target.isChildOf(this.node_AutoSpinMenu)) return;
-        this.node_AutoSpinMenu.active = false;
+
+        // 1. 處理 AutoSpin 選單：點選外部或非 Spin 按鈕則關閉
+        if (this.node_AutoSpinMenu && this.node_AutoSpinMenu.active) {
+            const isInsideAutoMenu = (target === this.node_AutoSpinMenu || target.isChildOf(this.node_AutoSpinMenu));
+            const isClickSpinBtn = this.node_spinBtn && (target === this.node_spinBtn || target.isChildOf(this.node_spinBtn));
+
+            if (!isInsideAutoMenu && !isClickSpinBtn) {
+                this.node_AutoSpinMenu.active = false;
+            }
+        }
+
+        // 2. 處理測試選單 (rdTest)：點選外部則關閉
+        if (this.node_rdTestMune && this.node_rdTestMune.active) {
+            const isInsideRdMenu = (target === this.node_rdTestMune || target.isChildOf(this.node_rdTestMune));
+
+            // 如果點擊是在選單外，就自動隱藏
+            if (!isInsideRdMenu) {
+                this.node_rdTestMune.active = false;
+            }
+        }
+    }
+
+    // ─── Free Game 轉場 ──────────────────────────────────────
+
+    /**
+     * 播放魔法圈轉場特效並替換背景
+     * @param isEntering true: 進入 Free Game (切換為 fg 背景), false: 離開 (切換為普通背景)
+     * @param onComplete 動畫遮擋點 (可在此刻刷新資料) 或結束 Callback
+     */
+    playMagicTransition(isEntering: boolean, onComplete?: () => void) {
+        if (!this.node_magicCircle) {
+            // 如果沒有魔法圈節點，直接換圖並 callback
+            this.swapFreeGameBackground(isEntering);
+            if (onComplete) onComplete();
+            return;
+        }
+
+        this.node_magicCircle.active = true;
+        this.node_magicCircle.opacity = 0;
+        this.node_magicCircle.scale = 0;
+
+        // 漸現放大遮擋畫面 -> 換圖 -> 縮小漸隱
+        cc.tween(this.node_magicCircle)
+            .parallel(
+                cc.tween().to(0.5, { opacity: 255 }),
+                cc.tween().to(0.5, { scale: 2.0 }, { easing: 'sineOut' })
+            )
+            .call(() => {
+                this.swapFreeGameBackground(isEntering);
+            })
+            .delay(0.5) // 停留一下讓玩家感受到轉換
+            .parallel(
+                cc.tween().to(0.5, { opacity: 0 }),
+                cc.tween().to(0.5, { scale: 0 })
+            )
+            .call(() => {
+                this.node_magicCircle.active = false;
+                if (onComplete) onComplete();
+            })
+            .start();
+    }
+
+    public swapFreeGameBackground(isEntering: boolean) {
+        if (this.sprite_bg) {
+            this.sprite_bg.spriteFrame = isEntering ? this.bg_freeGame : this.bg_normal;
+        }
+        if (this.sprite_pot) {
+            this.sprite_pot.spriteFrame = isEntering ? this.pot_freeGame : this.pot_normal;
+        }
+        if (this.node_fgMultiplierContainer) {
+            this.node_fgMultiplierContainer.active = isEntering;
+        }
+    }
+
+    /** 顯示 FG 恭喜進場的 Layout 1.5秒 */
+    showFGCongratsLayout(duration: number, onComplete: () => void) {
+        if (!this.node_fgCongratsLayout) {
+            if (onComplete) onComplete();
+            return;
+        }
+        this.node_fgCongratsLayout.active = true;
+        this.node_fgCongratsLayout.opacity = 0;
+        cc.tween(this.node_fgCongratsLayout)
+            .to(0.3, { opacity: 255 })
+            .delay(duration - 0.6)
+            .to(0.3, { opacity: 0 })
+            .call(() => {
+                this.node_fgCongratsLayout.active = false;
+                if (onComplete) onComplete();
+            })
+            .start();
+    }
+
+    // ─── FG 空瓶倍數動畫 ──────────────────────────────────────
+
+    updateFGMultiplier(mult: number) {
+        if (this.label_fgMultiplier) {
+            this.label_fgMultiplier.string = `x${mult}`;
+            // 讓字跳動一下
+            cc.tween(this.label_fgMultiplier.node)
+                .to(0.15, { scale: 1.5 })
+                .to(0.15, { scale: 1.0 })
+                .start();
+        }
+    }
+
+    playBottleFlyAnimation(startWorldPos: cc.Vec2, onArrive: () => void) {
+        if (!this.node_fgMultiplierContainer || !this.prefab_bottleFly) {
+            if (onArrive) onArrive();
+            return;
+        }
+
+        const flyNode = cc.instantiate(this.prefab_bottleFly);
+        flyNode.parent = this.node; // 放在 UI 層
+
+        const startLocal = this.node.convertToNodeSpaceAR(startWorldPos);
+        flyNode.setPosition(startLocal);
+
+        const targetWorld = this.node_fgMultiplierContainer.convertToWorldSpaceAR(cc.Vec2.ZERO);
+        const targetLocal = this.node.convertToNodeSpaceAR(targetWorld);
+
+        cc.tween(flyNode)
+            .to(0.5, { position: cc.v3(targetLocal.x, targetLocal.y, 0), scale: 0.5 }, { easing: 'cubicIn' })
+            .call(() => {
+                flyNode.destroy();
+                if (onArrive) onArrive();
+            })
+            .start();
+    }
+
+    /** 顯示 FG 結算 Total Win 畫面 */
+    showFGTotalWinLayout(totalWin: number, multiplier: number, duration: number, onComplete: () => void) {
+        if (!this.node_fgTotalWinLayout) {
+            cc.log("⚠️ 找不到 node_fgTotalWinLayout，直接結束");
+            if (onComplete) onComplete();
+            return;
+        }
+
+        if (this.label_fgTotalWinScore) {
+            this.label_fgTotalWinScore.string = `Total Win: ${totalWin.toLocaleString()} (x${multiplier})`;
+        }
+
+        this.node_fgTotalWinLayout.active = true;
+        this.node_fgTotalWinLayout.opacity = 0;
+
+        cc.tween(this.node_fgTotalWinLayout)
+            .to(0.3, { opacity: 255 })
+            .delay(duration)
+            .to(0.3, { opacity: 0 })
+            .call(() => {
+                this.node_fgTotalWinLayout.active = false;
+                if (onComplete) onComplete();
+            })
+            .start();
     }
 }

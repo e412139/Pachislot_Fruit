@@ -88,4 +88,15 @@ export default class SlotReelManager extends cc.Component {
     stopAllWinAnimations() {
         this.reels.forEach(r => r.stopAllWinAnims());
     }
+
+    /** 根據 SymbolID 取得盤面上所有符合的實體節點 (cc.Node) */
+    getSymbolNodesByID(id: SlotSymbolID): cc.Node[] {
+        const nodes: cc.Node[] = [];
+        this.reels.forEach(r => {
+            if (r) {
+                nodes.push(...r.getSymbolNodesByID(id));
+            }
+        });
+        return nodes;
+    }
 }

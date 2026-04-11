@@ -112,16 +112,28 @@ export default class SlotMath {
     }
 
     /**
-     * 計算盤面上的 Scatter 數量
-     * @returns scatter 個數（≥3 觸發 Free Game）
+     * 檢查是否在指定輪（1, 3, 5 輪）上分別至少出現一個 SCATTER
+     * 符合條件即判定為可觸發 Free Game
      */
-    static checkScatter(matrix: SlotSymbolID[][]): number {
-        let count = 0;
-        for (const col of matrix) {
-            for (const sym of col) {
-                if (sym === SlotSymbolID.SCATTER) count++;
+    static checkScatterTrigger(matrix: SlotSymbolID[][]): boolean {
+        // 陣列 index 0, 2, 4 對應實際畫面的 1, 3, 5 輪
+        const targetCols = [0, 2, 4];
+        
+        for (const colIdx of targetCols) {
+            let hasScatter = false;
+            if (colIdx < matrix.length) {
+                for (const sym of matrix[colIdx]) {
+                    if (sym === SlotSymbolID.SCATTER) {
+                        hasScatter = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasScatter) {
+                // 只要目標輪其中一輪沒出現 SCATTER，就判定失敗
+                return false; 
             }
         }
-        return count;
+        return true;
     }
 }

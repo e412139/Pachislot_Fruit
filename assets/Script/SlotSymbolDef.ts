@@ -15,4 +15,5 @@ export enum SlotSymbolID {
     A       = 9,
     WILD    = 10,
     SCATTER = 11,
+    BOTTLE  = 12, // Free Game 專用空瓶
 }

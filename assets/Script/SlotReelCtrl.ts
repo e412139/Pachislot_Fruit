@@ -104,6 +104,22 @@ export default class SlotReelCtrl extends cc.Component {
         return SlotSymbolID.S1;
     }
 
+    /** 取得可見區域內特定 ID 的 cc.Node */
+    getSymbolNodesByID(id: SlotSymbolID): cc.Node[] {
+        const nodes: cc.Node[] = [];
+        // 只掃描可見格 symbols[1] ~ symbols[ROW_COUNT]
+        for (let i = 0; i < ROW_COUNT; i++) {
+            const node = this.symbols[i + 1];
+            if (node) {
+                const comp = node.getComponent(SlotSymbolCtrl);
+                if (comp && comp.getSymbol() === id) {
+                    nodes.push(node);
+                }
+            }
+        }
+        return nodes;
+    }
+
     // ─── Update 主循環 ───────────────────────────────────────
 
     update(dt: number) {
