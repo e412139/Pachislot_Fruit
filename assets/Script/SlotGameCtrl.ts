@@ -59,6 +59,18 @@ export default class SlotGameCtrl extends cc.Component {
     @property(cc.AudioClip)
     bigWinAudio: cc.AudioClip = null;
 
+    @property(cc.AudioClip)
+    bgmNormal: cc.AudioClip = null;
+
+    @property(cc.AudioClip)
+    bgmFreeGame: cc.AudioClip = null;
+
+    @property(cc.AudioClip)
+    sfxFGTrigger: cc.AudioClip = null;
+
+    @property(cc.AudioClip)
+    sfxEmptyBottle: cc.AudioClip = null;
+
     // ─── 私有狀態 ────────────────────────────────────────────
 
     private phase: SlotGamePhase = SlotGamePhase.IDLE;
@@ -99,6 +111,27 @@ export default class SlotGameCtrl extends cc.Component {
 
         // 強制由程式碼接管 Auto Spin 選單按鈕，無視編輯器的 Bug
         this.bindAutoSpinButtons();
+
+        // 播放一般模式 BGM (考量瀏覽器限制，增加一次性點擊啟動機制)
+        if (this.bgmNormal) {
+            const playBGM = () => {
+                if (cc.audioEngine.getState(cc.audioEngine.getMusicVolume()) !== cc.audioEngine.AudioState.PLAYING) {
+                    cc.audioEngine.playMusic(this.bgmNormal, true);
+                }
+                // 移除監聽
+                cc.game.canvas.removeEventListener('mousedown', playBGM);
+                cc.game.canvas.removeEventListener('touchstart', playBGM);
+            };
+            cc.game.canvas.addEventListener('mousedown', playBGM);
+            cc.game.canvas.addEventListener('touchstart', playBGM);
+
+            // 嘗試播放 (延遲 0.5 秒，配合轉場感)
+            this.scheduleOnce(() => {
+                if (!cc.audioEngine.isMusicPlaying()) {
+                    cc.audioEngine.playMusic(this.bgmNormal, true);
+                }
+            }, 0.5);
+        }
     }
 
     onDestroy() {
@@ -393,14 +426,16 @@ export default class SlotGameCtrl extends cc.Component {
         const scatterNodes = this.reelManager.getSymbolNodesByID(SlotSymbolID.SCATTER);
         cc.log(`✨ 找到 ${scatterNodes.length} 個 Scatter 準備旋轉動畫`);
         scatterNodes.forEach(node => {
-            // 由原本旋轉 720 度改為「放大縮小」交互跳動
+            // 恢復旋轉 720 度動畫
             cc.tween(node)
-                .to(0.37, { scale: 1.25 }, { easing: 'sineInOut' })
-                .to(0.37, { scale: 0.85 }, { easing: 'sineInOut' })
-                .to(0.37, { scale: 1.15 }, { easing: 'sineInOut' })
-                .to(0.39, { scale: 1.0 }, { easing: 'sineInOut' })
+                .to(1.5, { angle: 720 }, { easing: 'cubicInOut' })
                 .start();
         });
+
+        // 播放中獎進入 FG 的音效
+        if (this.sfxFGTrigger) {
+            cc.audioEngine.playEffect(this.sfxFGTrigger, false);
+        }
 
         // 2. 1.5 秒後 (Scatter動畫播完)，開始轉入 Free Game 場景
         this.scheduleOnce(() => {
@@ -415,6 +450,10 @@ export default class SlotGameCtrl extends cc.Component {
             // 這樣當 Congrats 在 1.5 秒後淡出時，底下已經悄悄變成 FG 場景了。
             this.scheduleOnce(() => {
                 this.ui.swapFreeGameBackground(true);
+                // 切換為 FG BGM
+                if (this.bgmFreeGame) {
+                    cc.audioEngine.playMusic(this.bgmFreeGame, true);
+                }
             }, 0.3);
 
         }, 1.5);
@@ -454,6 +493,11 @@ export default class SlotGameCtrl extends cc.Component {
                 const worldPos = node.convertToWorldSpaceAR(cc.Vec2.ZERO);
 
                 this.scheduleOnce(() => {
+                    // 播放瓶子飛出的音效
+                    if (this.sfxEmptyBottle) {
+                        cc.audioEngine.playEffect(this.sfxEmptyBottle, false);
+                    }
+
                     this.ui.playBottleFlyAnimation(worldPos, () => {
                         this.fgMultiplier++;
                         this.ui.updateFGMultiplier(this.fgMultiplier);
@@ -503,6 +547,9 @@ export default class SlotGameCtrl extends cc.Component {
 
             // 展示最終 Total Win 畫面 (停留 2 秒)
             this.ui.showFGTotalWinLayout(finalWinAmount, this.fgMultiplier, 2.0, () => {
+                // 停止 FG BGM
+                cc.audioEngine.stopMusic();
+
                 // 如果總倍率達到大獎，進行大獎回放演出
                 if (totalFinalMulti >= BIG_WIN_THRESHOLD) {
                     this.ui.showBigWinAnimation(finalWinAmount, totalFinalMulti, () => {
@@ -541,6 +588,11 @@ export default class SlotGameCtrl extends cc.Component {
             this.phase = SlotGamePhase.IDLE;
             if (this.autoSpinCount !== 0) {
                 this.handleAutoSpin(0);
+            }
+
+            // 回復一般模式 BGM
+            if (this.bgmNormal) {
+                cc.audioEngine.playMusic(this.bgmNormal, true);
             }
         });
     }

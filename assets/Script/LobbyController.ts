@@ -8,4 +8,8 @@ export default class LobbyController extends cc.Component {
     cc.director.loadScene("game");
   }
 
+  enterSlot() {
+    cc.director.loadScene("slot");
+  }
+
 }

@@ -16837,7 +16837,7 @@
       "ctor": "Float64Array",
       "array": [
         1.214,
-        0.607,
+        3.707,
         0,
         0,
         0,
@@ -17485,6 +17485,18 @@
     },
     "bigWinAudio": {
       "__uuid__": "11c182ea-f6dc-4750-ba29-a7f041a03c50"
+    },
+    "bgmNormal": {
+      "__uuid__": "b208dce1-f2b5-4e86-8d17-17adb5ec328e"
+    },
+    "bgmFreeGame": {
+      "__uuid__": "eb71b7e4-2643-4cd9-b802-07cd47f4f5e9"
+    },
+    "sfxFGTrigger": {
+      "__uuid__": "7275ba2b-3a0d-4272-931c-757f3da332a1"
+    },
+    "sfxEmptyBottle": {
+      "__uuid__": "33766ec7-8b15-473e-b323-42653e2b83c3"
     },
     "_id": "8d5H96Sq5PwaXDapLQQQmC"
   },
