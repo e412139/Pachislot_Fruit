@@ -50,6 +50,25 @@ export default class UIController extends cc.Component {
   @property(cc.SpriteFrame)
   sprite_bigWin: cc.SpriteFrame = null;
 
+  // ==== Free Game 專用 UI ====
+  @property(cc.Sprite)
+  sprite_bg: cc.Sprite = null;
+
+  @property(cc.SpriteFrame)
+  bg_normal: cc.SpriteFrame = null;
+
+  @property(cc.SpriteFrame)
+  bg_freeGame: cc.SpriteFrame = null;
+
+  @property(cc.Node)
+  node_fgCongratsLayout: cc.Node = null;
+
+  @property(cc.Node)
+  node_fgTotalWinLayout: cc.Node = null;
+
+  @property(cc.Label)
+  label_fgTotalWinScore: cc.Label = null;
+
   updateScore(value: number) {
     this.scoreLabel.string = `Score: ${value.toLocaleString()}`;
   }
@@ -201,12 +220,71 @@ export default class UIController extends cc.Component {
     this.node_AutoSpinMenu.active = false;
   }
 
+  // ==== Free Game 轉場與背景控制 ====
+
+  /**
+   * 切換背景圖（白天/夜晚）
+   */
+  swapBackground(isFreeGame: boolean) {
+    if (this.sprite_bg) {
+      this.sprite_bg.spriteFrame = isFreeGame ? this.bg_freeGame : this.bg_normal;
+      cc.log(`🖼️ 背景切換為: ${isFreeGame ? "FG (夜晚)" : "Normal (白天)"}`);
+    }
+  }
+
+  /**
+   * 展示進入 FG 的恭喜畫面
+   */
+  showFGCongrats(duration: number, onComplete: () => void) {
+    if (!this.node_fgCongratsLayout) {
+      if (onComplete) onComplete();
+      return;
+    }
+    this.node_fgCongratsLayout.active = true;
+    this.node_fgCongratsLayout.opacity = 0;
+    cc.tween(this.node_fgCongratsLayout)
+      .to(0.3, { opacity: 255 })
+      .delay(duration - 0.6)
+      .to(0.3, { opacity: 0 })
+      .call(() => {
+        this.node_fgCongratsLayout.active = false;
+        if (onComplete) onComplete();
+      })
+      .start();
+  }
+
+  /**
+   * 顯示 FG 結算 Total Win 畫面
+   */
+  showFGTotalWin(totalWin: number, duration: number, onComplete: () => void) {
+    if (!this.node_fgTotalWinLayout) {
+      if (onComplete) onComplete();
+      return;
+    }
+    if (this.label_fgTotalWinScore) {
+      this.label_fgTotalWinScore.string = `Total Win: ${totalWin.toLocaleString()}`;
+    }
+    this.node_fgTotalWinLayout.active = true;
+    this.node_fgTotalWinLayout.opacity = 0;
+    cc.tween(this.node_fgTotalWinLayout)
+      .to(0.3, { opacity: 255 })
+      .delay(duration)
+      .to(0.3, { opacity: 0 })
+      .call(() => {
+        this.node_fgTotalWinLayout.active = false;
+        if (onComplete) onComplete();
+      })
+      .start();
+  }
+
   // ==== 說明介面 (Info Webview) 控制 ====
 
   onLoad() {
     // 0. 初始化 UI 狀態
     if (this.node_AutoSpinMenu) this.node_AutoSpinMenu.active = false;
     if (this.node_BigWinLayer) this.node_BigWinLayer.active = false;
+    if (this.node_fgCongratsLayout) this.node_fgCongratsLayout.active = false;
+    if (this.node_fgTotalWinLayout) this.node_fgTotalWinLayout.active = false;
     if (this.labelWinPoint) this.labelWinPoint.string = "";
 
     // 1. 監聯 Web 平台的 postMessage (因為 Cocos 在預覽模式下是用 iframe 渲染 WebView)

@@ -143,7 +143,7 @@ export default class SlotGameCtrl extends cc.Component {
 
         // 離開場景時強制停止所有音訊
         cc.audioEngine.stopAll();
-        
+
         // 停止大獎效果 (金幣/重複音效)
         this.stopBigWinEffects();
 
@@ -475,7 +475,7 @@ export default class SlotGameCtrl extends cc.Component {
 
     private enterFreeGame() {
         this.isFreeGame = true;
-        this.freeSpinsLeft = 6;
+        this.freeSpinsLeft = 8;
         this.freeGameTotalWin = 0;
         this.fgMultiplier = 2;
 

@@ -86,6 +86,24 @@ export default class Reel extends cc.Component {
     }
   }
 
+  /**
+   * 播放 Scatter (Start) 中獎動畫：旋轉 + 縮放脈衝
+   */
+  playScatterAnimation(rowIndex: number) {
+    let symbolNode = this.symbols[rowIndex + 1];
+    if (symbolNode) {
+      cc.Tween.stopAllByTarget(symbolNode);
+      symbolNode.opacity = 255;
+      symbolNode.angle = 0;
+      symbolNode.scale = 1.0;
+
+      cc.tween(symbolNode)
+        .to(0.75, { scale: 1.3, angle: 360 }, { easing: 'cubicOut' })
+        .to(0.75, { scale: 1.0, angle: 720 }, { easing: 'cubicIn' })
+        .start();
+    }
+  }
+
   stop(target: SymbolType[], callback?: Function) {
     cc.log("🛑 Reel.stop() called with target:", target);
     this.targetSymbols = target;

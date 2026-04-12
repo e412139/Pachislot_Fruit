@@ -4,6 +4,7 @@ import PayoutService from "./PayoutService";
 import UIController from "./UIController";
 import { GameState, SymbolType } from "./Enums";
 import CoinSpawner from "./CoinSpawner";
+import AudioService from "./AudioService";
 
 const { ccclass, property } = cc._decorator;
 
@@ -28,6 +29,9 @@ export default class GameManager extends cc.Component {
   @property(cc.AudioClip)
   bigWinAudio: cc.AudioClip = null;
 
+  @property(AudioService)
+  audioService: AudioService = null;
+
   @property(CoinSpawner)
   coinSpawner: CoinSpawner = null;
 
@@ -51,6 +55,11 @@ export default class GameManager extends cc.Component {
   credit: number = 1000;
   bet: number = 10;
 
+  private isFreeGame: boolean = false;
+  private freeSpinsLeft: number = 0;
+  private freeGameTotalWin: number = 0;
+  private savedAutoSpinCount: number = 0;
+
   spinResult = null;
   private riggedResult: SymbolType[][] = null; // 測試模式用的強制結果
 
@@ -68,12 +77,26 @@ export default class GameManager extends cc.Component {
       this.btn_spinNode.on(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
     }
 
-
-
     // 初始化確認關閉粒子
     if (this.spinParticle) {
       this.spinParticle.stopSystem();
     }
+
+    // 解決瀏覽器 Autoplay 限制：監聽第一次點擊或觸摸畫面即播放音樂
+    const playInitialBGM = () => {
+      if (this.audioService) this.audioService.playNormalBGM();
+      cc.game.canvas.removeEventListener('mousedown', playInitialBGM);
+      cc.game.canvas.removeEventListener('touchstart', playInitialBGM);
+    };
+    cc.game.canvas.addEventListener('mousedown', playInitialBGM);
+    cc.game.canvas.addEventListener('touchstart', playInitialBGM);
+
+    // 啟動一般模式背景音樂
+    this.scheduleOnce(() => {
+      if (this.audioService) {
+        this.audioService.playNormalBGM();
+      }
+    }, 0.5);
   }
 
   onDestroy() {
@@ -83,6 +106,11 @@ export default class GameManager extends cc.Component {
       this.btn_spinNode.off(cc.Node.EventType.TOUCH_CANCEL, this.onSpinTouchCancel, this);
     }
 
+    // 離開場景時強力釋放資源
+    if (this.audioService) {
+      this.audioService.stopAll();
+    }
+    this.unscheduleAllCallbacks();
   }
 
   /** 停止大獎特效（金幣噴發 + 音效），GameManager 專屬的遊戲效果層 */
@@ -161,6 +189,8 @@ export default class GameManager extends cc.Component {
       }
     }
 
+    if (this.isFreeGame && this.state !== GameState.IDLE) return;
+
     // 關閉原本可能開著的選單
     this.ui.hideAutoSpinMenu();
 
@@ -169,8 +199,10 @@ export default class GameManager extends cc.Component {
       cc.audioEngine.playEffect(this.betButtonAudio, false);
     }
 
-    this.credit -= this.bet;
-    this.ui.updateScore(this.credit);
+    if (!this.isFreeGame) {
+      this.credit -= this.bet;
+      this.ui.updateScore(this.credit);
+    }
 
     this.startSpinSequence();
     this.startSpin();
@@ -252,6 +284,19 @@ export default class GameManager extends cc.Component {
       }
     }
 
+    // ---- Scatter 檢查 ----
+    let scatterPositions: { col: number; row: number }[] = [];
+    for (let c = 0; c < this.spinResult.length; c++) {
+      for (let r = 0; r < this.spinResult[c].length; r++) {
+        if (this.spinResult[c][r] === SymbolType.SCATTER) {
+          scatterPositions.push({ col: c, row: r });
+        }
+      }
+    }
+
+    // 只要盤面上出現 3 個或更多 Scatter (1,3,5輪分佈或是任意)
+    const isScatterTriggered = scatterPositions.length >= 3;
+
     if (totalWinMultipliers > 0) {
       let coinsWon = totalWinMultipliers * this.bet;
       this.credit += coinsWon;
@@ -259,7 +304,12 @@ export default class GameManager extends cc.Component {
 
       this.ui.showWinAmount(coinsWon); // 顯示贏分數值 (含千分位)
 
-      if (totalWinMultipliers >= 10) {
+      if (this.isFreeGame) {
+        this.freeGameTotalWin += coinsWon;
+      }
+
+      // 如果是要進入 FG，不要在這邊跳 BigWin 彈窗，留到最後 FG 結算
+      if (totalWinMultipliers >= 10 && !isScatterTriggered && !this.isFreeGame) {
         // 觸發大獎彈窗跑分與音效等動畫
         this.showBigWin(coinsWon, totalWinMultipliers);
       } else {
@@ -273,6 +323,45 @@ export default class GameManager extends cc.Component {
     }
 
     this.ui.updateScore(this.credit);
+
+    // 處理 Scatter 動畫
+    if (isScatterTriggered) {
+      scatterPositions.forEach(pos => {
+        this.reels[pos.col].playScatterAnimation(pos.row);
+      });
+    }
+
+    // ---- 判斷是否進入 Free Game ----
+    if (isScatterTriggered && !this.isFreeGame) {
+      cc.log("⭐ 3 Scatter detected! Entering Free Game...");
+      this.scheduleOnce(() => {
+        this.prepareEnterFreeGame();
+      }, 1.5);
+      return;
+    }
+
+    // ---- Free Game 局數管理 ----
+    if (this.isFreeGame) {
+      this.freeSpinsLeft--;
+      this.ui.updateSpinButton(this.freeSpinsLeft);
+
+      let delay = 1.0;
+      if (totalWinMultipliers > 0) {
+        delay = totalWinMultipliers >= 10 ? 2.5 : 1.5;
+      }
+
+      if (this.freeSpinsLeft > 0) {
+        this.scheduleOnce(() => {
+          this.state = GameState.IDLE;
+          this.onSpinClick();
+        }, delay);
+      } else {
+        this.scheduleOnce(() => {
+          this.processFreeGameEnd();
+        }, delay + 1.0);
+      }
+      return;
+    }
 
     this.endSpinSequence(); // 一次spin結束後，將燈號還原到待機狀態
     this.state = GameState.IDLE;
@@ -396,4 +485,98 @@ export default class GameManager extends cc.Component {
     this.onSpinClick(); // 直接模擬按下旋轉來啟動
   }
 
+  // ==== Free Game 流程控制 (參照 Slot 機制) ====
+
+  private prepareEnterFreeGame() {
+    this.ui.clearWinAmount();
+    // 1. 播放 FG Trigger 音效
+    if (this.audioService) this.audioService.playFGTrigger();
+
+    // 2. 顯示過渡頁面
+    this.ui.showFGCongrats(1.5, () => {
+      this.enterFreeGame();
+    });
+
+    // 3. 在過渡期間悄悄換背景與 BGM
+    this.scheduleOnce(() => {
+      this.ui.swapBackground(true);
+      if (this.audioService) this.audioService.playFreeGameBGM();
+    }, 0.3);
+  }
+
+  private enterFreeGame() {
+    this.isFreeGame = true;
+    this.freeSpinsLeft = 8;
+    this.freeGameTotalWin = 0;
+
+    this.savedAutoSpinCount = this.autoSpinCount;
+    this.autoSpinCount = 0;
+
+    this.ui.updateSpinButton(this.freeSpinsLeft);
+
+    cc.log("✅ FG Started! Moving to IDLE for auto spin.");
+    this.state = GameState.IDLE;
+    this.onSpinClick();
+  }
+
+  private processFreeGameEnd() {
+    cc.log(`🏆 FG End! Total Win: ${this.freeGameTotalWin}`);
+
+    if (this.freeGameTotalWin > 0) {
+      this.ui.showFGTotalWin(this.freeGameTotalWin, 2.0, () => {
+        // 檢查是否達到大獎播放門檻
+        const multi = this.freeGameTotalWin / this.bet;
+        if (multi >= 10) {
+          this.showBigWin(this.freeGameTotalWin, multi);
+          // showBigWin 內部會調用 hideBigWinLayer，但我們需要知道什麼時候完全結束
+          // 這裡簡化一點，在大獎播完後再退出
+          this.scheduleOnce(() => { this.exitFreeGame(); }, 3.5);
+        } else {
+          this.exitFreeGame();
+        }
+      });
+    } else {
+      this.exitFreeGame();
+    }
+  }
+
+  private exitFreeGame() {
+    cc.log("🔙 Exiting Free Game to Normal...");
+    this.ui.swapBackground(false);
+    if (this.audioService) this.audioService.playNormalBGM();
+
+    this.isFreeGame = false;
+    this.autoSpinCount = this.savedAutoSpinCount;
+    this.ui.updateSpinButton(this.autoSpinCount);
+
+    this.state = GameState.IDLE;
+    if (this.autoSpinCount !== 0) {
+      this.onResult(); // 這裡用 onResult 觸發 auto spin 延遲檢查比較方便
+    }
+  }
+
+  // ================= 測試模式：Free Game =================
+
+  /** 
+   * [測試專用] 強制觸發 Free Game 
+   * 請將您的 freeGame 按鈕綁定到這個函式！ (Click Event -> forceFreeGame)
+   */
+  forceFreeGame() {
+    if (this.state !== GameState.IDLE || this.isFreeGame) {
+      cc.warn("⚠️ 遊戲進行中，無法強制觸發 FG");
+      return;
+    }
+
+    const S = SymbolType.SCATTER;
+    const A = SymbolType.A;
+    // 構建一個中線全是 Scatter 的盤面 (Reel 0,1,2 中間都是 S)
+    this.riggedResult = [
+      [A, S, A], // 第1輪 (Top, Mid, Bot)
+      [A, S, A], // 第2輪
+      [A, S, A]  // 第3輪
+    ];
+
+    cc.log("🚀 [Test] 強制觸發 3 Scatter 中獎流程");
+    this.onSpinClick();
+  }
 }
