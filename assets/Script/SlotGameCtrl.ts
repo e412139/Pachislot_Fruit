@@ -140,6 +140,16 @@ export default class SlotGameCtrl extends cc.Component {
             this.btn_spinNode.off(cc.Node.EventType.TOUCH_END, this.onTouchEnd, this);
             this.btn_spinNode.off(cc.Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
         }
+
+        // 離開場景時強制停止所有音訊
+        cc.audioEngine.stopAll();
+        
+        // 停止大獎效果 (金幣/重複音效)
+        this.stopBigWinEffects();
+
+        // 停止所有排程與 Tween
+        this.unscheduleAllCallbacks();
+        cc.Tween.stopAllByTarget(this);
     }
 
     // ─── 觸控 / 長按 ────────────────────────────────────────
@@ -426,6 +436,10 @@ export default class SlotGameCtrl extends cc.Component {
         const scatterNodes = this.reelManager.getSymbolNodesByID(SlotSymbolID.SCATTER);
         cc.log(`✨ 找到 ${scatterNodes.length} 個 Scatter 準備旋轉動畫`);
         scatterNodes.forEach(node => {
+            // 先停止可能存在的殘留動畫，並將角度強制歸零，確保每次都能完整旋轉
+            cc.Tween.stopAllByTarget(node);
+            node.angle = 0;
+
             // 恢復旋轉 720 度動畫
             cc.tween(node)
                 .to(1.5, { angle: 720 }, { easing: 'cubicInOut' })

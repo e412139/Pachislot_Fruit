@@ -220,4 +220,11 @@ export default class SlotPotCtrl extends cc.Component {
             this.bubbleParticle.stopSystem();
         }
     }
+
+    onDestroy() {
+        this.unscheduleAllCallbacks();
+        if (this.potSprite) cc.Tween.stopAllByTarget(this.potSprite);
+        if (this.smokeSprite) cc.Tween.stopAllByTarget(this.smokeSprite);
+        if (this.bubbleParticle) cc.Tween.stopAllByTarget(this.bubbleParticle.node);
+    }
 }

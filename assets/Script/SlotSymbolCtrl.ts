@@ -64,6 +64,10 @@ export default class SlotSymbolCtrl extends cc.Component {
         this.node.opacity = 255;
     }
 
+    onDestroy() {
+        cc.Tween.stopAllByTarget(this.node);
+    }
+
     // ─── 私有工具 ────────────────────────────────────────────
 
     private getSymbolName(id: SlotSymbolID): string {
