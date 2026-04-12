@@ -4,184 +4,235 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Game Rules</title>
+  <title>水果 Slot 遊戲規則</title>
   <style>
+    :root {
+      --primary-gold: #ffd700;
+      --accent-cyan: #00ffcc;
+      --bg-dark: #120a1f;
+      --card-bg: rgba(255, 255, 255, 0.08);
+      --border-color: rgba(255, 215, 0, 0.3);
+      --font-main: 20px;
+      --font-title: 32px;
+      --font-sub: 24px;
+    }
+
     body {
       margin: 0;
       padding: 0;
       background: linear-gradient(135deg, #1a0b2e 0%, #000000 100%);
       color: #fff;
-      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       user-select: none;
       -webkit-user-select: none;
+      line-height: 1.5;
     }
 
     .container {
-      padding: 20px 25px;
-      /* 預留右上角給 Cocos X 關閉按紐的空間 */
-      padding-top: 40px;
+      padding: 30px 20px;
+      padding-top: 60px;
+      max-width: 600px;
+      margin: 0 auto;
     }
 
     h1 {
       text-align: center;
-      color: #ffd700;
-      text-shadow: 0 0 10px #ffd70055;
-      margin-top: 10px;
-      font-size: 1.8rem;
-      letter-spacing: 2px;
+      color: var(--primary-gold);
+      text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+      margin-bottom: 40px;
+      font-size: var(--font-title);
+      letter-spacing: 3px;
     }
 
-    .section {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      padding: 15px;
-      margin-bottom: 20px;
-      border: 1px solid rgba(255, 215, 0, 0.2);
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-    }
-
-    h2 {
+    .section-title {
       color: #ffa500;
-      font-size: 1.2rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      padding-bottom: 8px;
+      font-size: var(--font-sub);
+      margin: 30px 0 15px 0;
+      display: flex;
+      align-items: center;
+      border-left: 5px solid var(--primary-gold);
+      padding-left: 15px;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
+    /* 單列卡片樣式 */
+    .pay-card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
 
-    th,
-    td {
-      padding: 12px 10px;
-      text-align: left;
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    .sym-icon {
+      font-size: 64px;
+      /* 超大圖標 */
+      width: 100px;
+      height: 100px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 16px;
+      margin-right: 25px;
+      flex-shrink: 0;
     }
 
-    th {
-      color: #ddd;
-      font-weight: 600;
+    .sym-info {
+      flex-grow: 1;
     }
 
-    td.mul {
-      color: #00ffcc;
+    .sym-name {
+      font-size: 24px;
       font-weight: bold;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .sym-desc {
+      font-size: 18px;
+      color: #aaa;
+    }
+
+    .sym-payout {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--accent-cyan);
       text-align: right;
-      font-size: 1.1rem;
+      text-shadow: 0 0 10px rgba(0, 255, 204, 0.4);
     }
 
-    .badge {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 0.8rem;
-      font-weight: bold;
-      background: rgba(255, 215, 0, 0.2);
-      color: #ffd700;
+    /* 特殊符號樣式 */
+    .pay-card.special {
+      border: 1px solid #ff4d4d;
+      background: rgba(255, 77, 77, 0.1);
     }
 
-    ul {
-      padding-left: 20px;
-      line-height: 1.6;
+    .pay-card.special .sym-payout {
+      color: #ff6666;
     }
 
-    li {
-      margin-bottom: 10px;
+    /* 文字說明區 */
+    .rule-text-card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 15px;
+      padding: 25px;
+      font-size: 19px;
+      color: #ddd;
+      line-height: 1.8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .rule-text-card strong {
+      color: var(--primary-gold);
     }
 
     .close-btn {
       position: fixed;
-      top: 15px;
-      right: 15px;
-      width: 40px;
-      height: 40px;
+      top: 20px;
+      right: 20px;
+      width: 50px;
+      height: 50px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.15);
       color: #fff;
-      font-size: 20px;
+      font-size: 28px;
       display: flex;
       justify-content: center;
       align-items: center;
       text-decoration: none;
       border: 1px solid rgba(255, 255, 255, 0.3);
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 100;
     }
 
     .close-btn:active {
-      background: rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.4);
+      transform: scale(0.9);
     }
   </style>
 </head>
 
 <body>
-  <!-- WebView 專屬關閉按鈕，同時支援 Web 預覽與未來打包 Native 手機 -->
   <a href="javascript:void(0)" onclick="closeCocos()" class="close-btn">✖</a>
+
+  <div class="container">
+    <h1>水果 Slot 遊戲說明</h1>
+
+    <div class="section-title">🏆 賠率表 (連線 3 顆)</div>
+
+    <!-- Apple -->
+    <div class="pay-card">
+      <div class="sym-icon">🍏</div>
+      <div class="sym-info">
+        <div class="sym-name">青蘋果</div>
+        <div class="sym-desc">Super Win 最高獎</div>
+      </div>
+      <div class="sym-payout">x 50</div>
+    </div>
+
+    <!-- Banana -->
+    <div class="pay-card">
+      <div class="sym-icon">🍌</div>
+      <div class="sym-info">
+        <div class="sym-name">香蕉</div>
+        <div class="sym-desc">Mega Win 大獎</div>
+      </div>
+      <div class="sym-payout">x 20</div>
+    </div>
+
+    <!-- Cherry -->
+    <div class="pay-card">
+      <div class="sym-icon">🍒</div>
+      <div class="sym-info">
+        <div class="sym-name">櫻桃</div>
+        <div class="sym-desc">Big Win 鉅賞</div>
+      </div>
+      <div class="sym-payout">x 10</div>
+    </div>
+
+    <!-- Blueberry -->
+    <div class="pay-card">
+      <div class="sym-icon">🫐</div>
+      <div class="sym-info">
+        <div class="sym-name">藍莓</div>
+        <div class="sym-desc">一般獎金</div>
+      </div>
+      <div class="sym-payout">x 5</div>
+    </div>
+
+    <!-- Scatter -->
+    <div class="pay-card special">
+      <div class="sym-icon">⭐</div>
+      <div class="sym-info">
+        <div class="sym-name">SCATTER</div>
+        <div class="sym-desc">分散免費獎 (FG 觸發)</div>
+      </div>
+      <div class="sym-payout">x 100</div>
+    </div>
+
+    <div class="section-title">🃏 特殊規則</div>
+
+    <div class="rule-text-card">
+      • <strong>WILD 🍉 百搭符號：</strong><br>可代替除了 SCATTER 以外的所有圖標。<br><br>
+      • <strong>免費遊戲 (Free Game)：</strong><br>畫面上出現 <strong>3 個 ⭐</strong> 即可觸發 <strong>8 局免費旋轉</strong>！<br><br>
+      • <strong>5 條有效連線：</strong><br>包含橫向三行與兩條大交叉。同一條線上湊滿 3 個符合圖案即中獎。
+    </div>
+  </div>
 
   <script>
     function closeCocos() {
-      // 1. 發送 Web 專用的 postMessage (解決電腦網頁預覽沒反應的問題)
       if (window.parent) {
         window.parent.postMessage('cocos_close', '*');
       }
-      // 2. 觸發 Native 手機專用的 URL Scheme
       window.location.href = "cocos://close";
     }
   </script>
-
-  <div class="container">
-    <h1>遊戲賠率與連線說明</h1>
-
-    <div class="section">
-      <h2>🏆 符號賠率表 (連線 3 顆)</h2>
-      <table>
-        <tr>
-          <th>符號</th>
-          <th>名稱類別</th>
-          <th style="text-align: right;">贏分倍率</th>
-        </tr>
-        <tr>
-          <td><span class="badge">🍏 符號</span></td>
-          <td>Super Win 最高獎</td>
-          <td class="mul">x 50</td>
-        </tr>
-        <tr>
-          <td><span class="badge">🍌 符號</span></td>
-          <td>Mega Win 大獎</td>
-          <td class="mul">x 20</td>
-        </tr>
-        <tr>
-          <td><span class="badge">🍒 符號</span></td>
-          <td>Big Win 鉅賞</td>
-          <td class="mul">x 10</td>
-        </tr>
-        <tr>
-          <td><span class="badge">🫐 符號</span></td>
-          <td>一般獎金</td>
-          <td class="mul">x 5</td>
-        </tr>
-        <tr>
-          <td><span class="badge"
-              style="background: rgba(255,0,0,0.3); color: #ff6666; border: 1px solid #ff6666;">SCATTER ⭐ 符號</span>
-          </td>
-          <td>分散免費獎</td>
-          <td class="mul" style="color: #ff6666;">x 100</td>
-        </tr>
-      </table>
-    </div>
-
-    <div class="section">
-      <h2>🃏 特殊規則與操作說明</h2>
-      <ul>
-        <li><strong style="color: #ffd700;">WILD 🍉 百搭符號：</strong> 可以代替畫面上所有除了 SCATTER 以外的任何一般圖標，來幫助湊成連線獎金！</li>
-        <li><strong style="color: #00ffcc;">5 條有效連線 (Paylines)：</strong> 包含了上方水平、中央水平、下方水平，以及兩條交叉對角線。當同一條線上湊齊 3
-          個符合圖案即算中獎。</li>
-        <li><strong style="color: #ffa500;">自動旋轉 (Auto Spin)：</strong> 您可以在遊戲主畫面中<strong
-            style="text-decoration: underline;">長按 Spin 按鈕 0.5 秒</strong>喚出隱藏的自動掛機局數選單。</li>
-      </ul>
-    </div>
-  </div>
 </body>
 
 </html>
