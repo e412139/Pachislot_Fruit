@@ -108,6 +108,16 @@ export default class SlotUICtrl extends cc.Component {
     @property(cc.Label)
     label_fgTotalWinScore: cc.Label = null; // FG 結算畫面的總分文字
 
+    // ─── 說明介面 (Info Webview) 與跳轉 ───────────────────────
+    @property(cc.Node)
+    node_webViewInfo: cc.Node = null; // 整個說明介面層級
+
+    @property(cc.WebView)
+    webView: cc.WebView = null;
+
+    @property(cc.TextAsset)
+    rulesHtmlFile: cc.TextAsset = null;
+
     // ─── 生命週期 ────────────────────────────────────────────
 
     onLoad() {
@@ -117,7 +127,15 @@ export default class SlotUICtrl extends cc.Component {
         if (this.node_fgCongratsLayout) this.node_fgCongratsLayout.active = false;
         if (this.node_fgMultiplierContainer) this.node_fgMultiplierContainer.active = false;
         if (this.node_fgTotalWinLayout) this.node_fgTotalWinLayout.active = false;
+        if (this.node_webViewInfo) this.node_webViewInfo.active = false;
         if (this.winLabel) this.winLabel.string = "";
+
+        // 監聽 Web 平台的 postMessage
+        if (cc.sys.isBrowser) {
+            window.addEventListener('message', (event) => {
+                if (event.data === 'cocos_close') this.hideInfo();
+            });
+        }
 
         // 全域點擊：點到選單外部則自動關閉
         if (cc.Canvas.instance && cc.Canvas.instance.node) {
@@ -415,5 +433,39 @@ export default class SlotUICtrl extends cc.Component {
                 if (onComplete) onComplete();
             })
             .start();
+    }
+
+    // ─── 新增功能：返回與說明 ─────────────────────────────────
+
+    backToLobby() {
+        cc.log("🚀 返回大廳場景 (lobby)");
+        cc.director.loadScene("lobby");
+    }
+
+    showInfo() {
+        cc.log(`ℹ️ [SlotUICtrl] showInfo() 呼叫`);
+        cc.log(`   - node_webViewInfo: ${this.node_webViewInfo ? "已連結" : "❌ 未連結"}`);
+        cc.log(`   - webView: ${this.webView ? "已連結" : "❌ 未連結"}`);
+        cc.log(`   - rulesHtmlFile: ${this.rulesHtmlFile ? "已連結" : "❌ 未連結"}`);
+
+        if (this.node_webViewInfo) this.node_webViewInfo.active = true;
+
+        if (this.webView && this.rulesHtmlFile) {
+            // 註冊 JS Bridge 監聽 Scheme (cocos://close)
+            this.webView.setJavascriptInterfaceScheme("cocos");
+            this.webView.setOnJSCallback((target: cc.WebView, url: string) => {
+                cc.log(`🔗 WebView Callback: ${url}`);
+                if (url === "cocos://close") this.hideInfo();
+            });
+
+            // 載入 Data URI
+            const uri = "data:text/html;charset=utf-8," + encodeURIComponent(this.rulesHtmlFile.text);
+            this.webView.url = uri;
+            cc.log(`🌐 WebView 網址已設定 (長度: ${uri.length})`);
+        }
+    }
+
+    hideInfo() {
+        if (this.node_webViewInfo) this.node_webViewInfo.active = false;
     }
 }

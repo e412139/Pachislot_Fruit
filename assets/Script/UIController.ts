@@ -262,8 +262,8 @@ export default class UIController extends cc.Component {
   // ==== 場景切換 ====
 
   backToLobby() {
-    cc.log("🚀 返回大廳場景 (Lobby)");
-    cc.director.loadScene("Lobby");
+    cc.log("🚀 返回大廳場景 (lobby)");
+    cc.director.loadScene("lobby");
   }
 
   // ================= 網頁端漂亮 iOS 提示窗 =================

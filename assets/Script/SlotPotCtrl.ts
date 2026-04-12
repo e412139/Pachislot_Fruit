@@ -209,7 +209,7 @@ export default class SlotPotCtrl extends cc.Component {
         if (this.potSprite) {
             cc.Tween.stopAllByTarget(this.potSprite);
             this.potSprite.scale = 1;
-            this.potSprite.rotation = 0;
+            this.potSprite.angle = 0;
             this.potSprite.y = this.idleBaseY;
         }
         if (this.smokeSprite) {

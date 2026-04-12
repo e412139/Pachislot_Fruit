@@ -118,7 +118,7 @@ export default class SlotMath {
     static checkScatterTrigger(matrix: SlotSymbolID[][]): boolean {
         // 陣列 index 0, 2, 4 對應實際畫面的 1, 3, 5 輪
         const targetCols = [0, 2, 4];
-        
+
         for (const colIdx of targetCols) {
             let hasScatter = false;
             if (colIdx < matrix.length) {
@@ -131,7 +131,7 @@ export default class SlotMath {
             }
             if (!hasScatter) {
                 // 只要目標輪其中一輪沒出現 SCATTER，就判定失敗
-                return false; 
+                return false;
             }
         }
         return true;
