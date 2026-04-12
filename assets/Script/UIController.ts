@@ -64,10 +64,7 @@ export default class UIController extends cc.Component {
   node_fgCongratsLayout: cc.Node = null;
 
   @property(cc.Node)
-  node_fgTotalWinLayout: cc.Node = null;
-
-  @property(cc.Label)
-  label_fgTotalWinScore: cc.Label = null;
+  node_neonSnake: cc.Node = null;
 
   updateScore(value: number) {
     this.scoreLabel.string = `Score: ${value.toLocaleString()}`;
@@ -94,6 +91,7 @@ export default class UIController extends cc.Component {
    * @param onCounterDone 跑分滾完時的回呼 (由 GameManager 提供，用來停金幣/停音效)
    */
   showBigWinAnimation(coinsWon: number, multiplier: number, onCounterDone?: () => void) {
+    this.setNeonEffect(false);
     if (!this.node_BigWinLayer || !this.sprite_titleWin) {
       cc.log("⚠️ 大獎節點未綁定 UIController，略過動畫");
       return;
@@ -254,27 +252,25 @@ export default class UIController extends cc.Component {
   }
 
   /**
-   * 顯示 FG 結算 Total Win 畫面
+   * 切換霓虹燈特效開關
    */
-  showFGTotalWin(totalWin: number, duration: number, onComplete: () => void) {
-    if (!this.node_fgTotalWinLayout) {
-      if (onComplete) onComplete();
-      return;
+  setNeonEffect(active: boolean) {
+    if (this.node_neonSnake) {
+      this.node_neonSnake.active = active;
+      let anim = this.node_neonSnake.getComponent(cc.Animation);
+      if (anim) {
+        if (active) {
+          // 強制指定動畫名稱播放，解決 Default Clip 偶爾失效的問題
+          anim.play('anim_neon_fg_snake');
+          cc.log("🎨 霓虹燈動畫：開始循環播放");
+        } else {
+          anim.stop();
+          cc.log("🎨 霓虹燈動畫：停止並隱藏");
+        }
+      } else {
+        cc.warn("⚠️ 找不到 NeonSnake 節點上的 Animation 組件！");
+      }
     }
-    if (this.label_fgTotalWinScore) {
-      this.label_fgTotalWinScore.string = `Total Win: ${totalWin.toLocaleString()}`;
-    }
-    this.node_fgTotalWinLayout.active = true;
-    this.node_fgTotalWinLayout.opacity = 0;
-    cc.tween(this.node_fgTotalWinLayout)
-      .to(0.3, { opacity: 255 })
-      .delay(duration)
-      .to(0.3, { opacity: 0 })
-      .call(() => {
-        this.node_fgTotalWinLayout.active = false;
-        if (onComplete) onComplete();
-      })
-      .start();
   }
 
   // ==== 說明介面 (Info Webview) 控制 ====
@@ -284,7 +280,6 @@ export default class UIController extends cc.Component {
     if (this.node_AutoSpinMenu) this.node_AutoSpinMenu.active = false;
     if (this.node_BigWinLayer) this.node_BigWinLayer.active = false;
     if (this.node_fgCongratsLayout) this.node_fgCongratsLayout.active = false;
-    if (this.node_fgTotalWinLayout) this.node_fgTotalWinLayout.active = false;
     if (this.labelWinPoint) this.labelWinPoint.string = "";
 
     // 1. 監聯 Web 平台的 postMessage (因為 Cocos 在預覽模式下是用 iframe 渲染 WebView)
