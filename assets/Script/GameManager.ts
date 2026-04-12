@@ -514,6 +514,9 @@ export default class GameManager extends cc.Component {
 
     this.ui.updateSpinButton(this.freeSpinsLeft);
 
+    // 啟動霓虹蛇特效
+    this.ui.setNeonEffect(true);
+
     cc.log("✅ FG Started! Moving to IDLE for auto spin.");
     this.state = GameState.IDLE;
     this.onSpinClick();
@@ -522,19 +525,23 @@ export default class GameManager extends cc.Component {
   private processFreeGameEnd() {
     cc.log(`🏆 FG End! Total Win: ${this.freeGameTotalWin}`);
 
+    // 不論贏多少或有沒有大獎，旋轉既然結束了，就先把霓虹燈關掉
+    this.ui.setNeonEffect(false);
+
     if (this.freeGameTotalWin > 0) {
-      this.ui.showFGTotalWin(this.freeGameTotalWin, 2.0, () => {
-        // 檢查是否達到大獎播放門檻
-        const multi = this.freeGameTotalWin / this.bet;
-        if (multi >= 10) {
-          this.showBigWin(this.freeGameTotalWin, multi);
-          // showBigWin 內部會調用 hideBigWinLayer，但我們需要知道什麼時候完全結束
-          // 這裡簡化一點，在大獎播完後再退出
-          this.scheduleOnce(() => { this.exitFreeGame(); }, 3.5);
-        } else {
+      const multi = this.freeGameTotalWin / this.bet;
+
+      // 判斷是否達到大獎演出門檻
+      if (multi >= 10) {
+        this.showBigWin(this.freeGameTotalWin, multi);
+
+        this.scheduleOnce(() => {
           this.exitFreeGame();
-        }
-      });
+        }, 4.0);
+      } else {
+        cc.log("⚖️ 未達大獎門檻，直接結束 Free Game");
+        this.exitFreeGame();
+      }
     } else {
       this.exitFreeGame();
     }
@@ -544,6 +551,9 @@ export default class GameManager extends cc.Component {
     cc.log("🔙 Exiting Free Game to Normal...");
     this.ui.swapBackground(false);
     if (this.audioService) this.audioService.playNormalBGM();
+
+    // 關閉霓虹蛇特效
+    this.ui.setNeonEffect(false);
 
     this.isFreeGame = false;
     this.autoSpinCount = this.savedAutoSpinCount;
@@ -562,8 +572,15 @@ export default class GameManager extends cc.Component {
    * 請將您的 freeGame 按鈕綁定到這個函式！ (Click Event -> forceFreeGame)
    */
   forceFreeGame() {
-    if (this.state !== GameState.IDLE || this.isFreeGame) {
-      cc.warn("⚠️ 遊戲進行中，無法強制觸發 FG");
+    // 檢查1：轉輪或是中獎動畫還在進行中
+    if (this.state !== GameState.IDLE) {
+      this.ui.showIOSAlert("轉輪或動畫正在進行中！\n請等這局完全結束後，再進行大獎測試！");
+      return;
+    }
+
+    // 檢查2：如果是自動旋轉中
+    if (this.autoSpinCount !== 0) {
+      this.ui.showIOSAlert("請先終止「自動旋轉」後，再進行測試！");
       return;
     }
 
