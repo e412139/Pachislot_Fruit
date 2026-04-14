@@ -90,10 +90,10 @@
     "_active": true,
     "_components": [
       {
-        "__id__": 30
+        "__id__": 33
       },
       {
-        "__id__": 31
+        "__id__": 34
       }
     ],
     "_prefab": null,
@@ -1026,12 +1026,18 @@
       },
       {
         "__id__": 27
+      },
+      {
+        "__id__": 29
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 29
+        "__id__": 31
+      },
+      {
+        "__id__": 32
       }
     ],
     "_prefab": null,
@@ -1046,7 +1052,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 500,
-      "height": 200
+      "height": 280
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -1058,7 +1064,7 @@
       "ctor": "Float64Array",
       "array": [
         -260,
-        -275.96,
+        -275.96000000000004,
         0,
         0,
         0,
@@ -1120,7 +1126,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        74.8,
+        114.80000000000001,
         0,
         0,
         0,
@@ -1215,7 +1221,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        9.399999999999995,
+        49.400000000000006,
         0,
         0,
         0,
@@ -1297,7 +1303,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 537.79,
+      "width": 446.68,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -1310,7 +1316,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -56,
+        -15.999999999999993,
         0,
         0,
         0,
@@ -1349,8 +1355,8 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "圖片來源 Ai 產生，與官方素材",
-    "_N$string": "圖片來源 Ai 產生，與官方素材",
+    "_string": "圖片Ai 產生，與官方素材",
+    "_N$string": "圖片Ai 產生，與官方素材",
     "_fontSize": 40,
     "_lineHeight": 40,
     "_enableWrapText": true,
@@ -1368,6 +1374,101 @@
     "_id": "7es3t3qCJE1oAIQcs1tNe2"
   },
   {
+    "__type__": "cc.Node",
+    "_name": "New Label",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 22
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 30
+      }
+    ],
+    "_prefab": null,
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 231.17,
+      "height": 50.4
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        -81.39999999999999,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": "95dA+yVkpOUaudnENc3gwW"
+  },
+  {
+    "__type__": "cc.Label",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 29
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "思旻的 demo",
+    "_N$string": "思旻的 demo",
+    "_fontSize": 40,
+    "_lineHeight": 40,
+    "_enableWrapText": true,
+    "_N$file": null,
+    "_isSystemFontUsed": true,
+    "_spacingX": 0,
+    "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
+    "_N$horizontalAlign": 1,
+    "_N$verticalAlign": 1,
+    "_N$fontFamily": "Arial",
+    "_N$overflow": 0,
+    "_N$cacheMode": 0,
+    "_id": "11ZCenDx9NEIZWMDn7dFTV"
+  },
+  {
     "__type__": "cc.Widget",
     "_name": "",
     "_objFlags": 0,
@@ -1377,10 +1478,10 @@
     "_enabled": true,
     "alignMode": 1,
     "_target": null,
-    "_alignFlags": 10,
+    "_alignFlags": 8,
     "_left": 100,
     "_right": 0,
-    "_top": 0,
+    "_top": 775.96,
     "_bottom": 0,
     "_verticalCenter": -275.96,
     "_horizontalCenter": 0,
@@ -1393,6 +1494,38 @@
     "_originalWidth": 0,
     "_originalHeight": 0,
     "_id": "c0IGpdSURHgLGeMugWbBLL"
+  },
+  {
+    "__type__": "cc.Layout",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 22
+    },
+    "_enabled": true,
+    "_layoutSize": {
+      "__type__": "cc.Size",
+      "width": 300,
+      "height": 200
+    },
+    "_resize": 0,
+    "_N$layoutType": 2,
+    "_N$cellSize": {
+      "__type__": "cc.Size",
+      "width": 40,
+      "height": 40
+    },
+    "_N$startAxis": 0,
+    "_N$paddingLeft": 0,
+    "_N$paddingRight": 0,
+    "_N$paddingTop": 0,
+    "_N$paddingBottom": 0,
+    "_N$spacingX": 0,
+    "_N$spacingY": 15,
+    "_N$verticalDirection": 1,
+    "_N$horizontalDirection": 0,
+    "_N$affectedByScale": false,
+    "_id": "33QFclWy9MULWmyy+ncszW"
   },
   {
     "__type__": "cc.Canvas",
