@@ -203,19 +203,27 @@ export default class UIController extends cc.Component {
   }
 
   private onGlobalTouch(event: cc.Event.EventTouch) {
-    if (!this.node_AutoSpinMenu || !this.node_AutoSpinMenu.active) return;
-
     let targetNode = event.target as cc.Node;
 
-    // 排除點擊自己 (Spin 按鈕)，讓它走自己該走的流程
-    if (this.node_spinBtn && (targetNode === this.node_spinBtn || targetNode.isChildOf(this.node_spinBtn))) return;
+    // 1. 處理 AutoSpin 選單的自動關閉
+    if (this.node_AutoSpinMenu && this.node_AutoSpinMenu.active) {
+      let isSpinBtn = this.node_spinBtn && (targetNode === this.node_spinBtn || targetNode.isChildOf(this.node_spinBtn));
+      let isAutoMenu = targetNode === this.node_AutoSpinMenu || targetNode.isChildOf(this.node_AutoSpinMenu);
 
-    // 排除點擊選單自己與裡面的按鈕項目
-    if (targetNode === this.node_AutoSpinMenu || targetNode.isChildOf(this.node_AutoSpinMenu)) return;
+      if (!isSpinBtn && !isAutoMenu) {
+        cc.log("點擊空白處，關閉局數選單");
+        this.node_AutoSpinMenu.active = false;
+      }
+    }
 
-    // 都不是的話，就代表點在其他地方（空白處），自動收起選單
-    cc.log("點擊空白處，關閉局數選單");
-    this.node_AutoSpinMenu.active = false;
+    // 2. 處理遊戲說明 (WebView) 的自動關閉
+    if (this.node_webViewInfo && this.node_webViewInfo.active) {
+      // 若點擊目標不是 webView 本身（例如點到半透明遮罩背景或其他地方）就關閉
+      let isWebView = this.webView && (targetNode === this.webView.node || targetNode.isChildOf(this.webView.node));
+      if (!isWebView) {
+        this.hideInfo();
+      }
+    }
   }
 
   // ==== Free Game 轉場與背景控制 ====

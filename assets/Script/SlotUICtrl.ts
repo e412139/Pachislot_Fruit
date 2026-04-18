@@ -299,6 +299,16 @@ export default class SlotUICtrl extends cc.Component {
                 this.node_rdTestMune.active = false;
             }
         }
+
+        // 3. 處理遊戲說明 (WebView) 的自動關閉：點選 WebView 元件以外的區域則關閉
+        if (this.node_webViewInfo && this.node_webViewInfo.active) {
+            // Cocos 的 WebView DOM iframe 會攔截本身的點擊。
+            // 會傳遞到這裡的通常是 Cocos 節點（例如半透明黑色背景遮罩）
+            const isInsideWebView = this.webView && (target === this.webView.node || target.isChildOf(this.webView.node));
+            if (!isInsideWebView) {
+                this.hideInfo();
+            }
+        }
     }
 
     // ─── Free Game 轉場 ──────────────────────────────────────
