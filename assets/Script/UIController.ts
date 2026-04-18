@@ -66,6 +66,9 @@ export default class UIController extends cc.Component {
   @property(cc.Node)
   node_neonSnake: cc.Node = null;
 
+  @property(cc.Prefab)
+  prefab_loading: cc.Prefab = null;
+
   updateScore(value: number) {
     this.scoreLabel.string = `Score: ${value.toLocaleString()}`;
   }
@@ -344,6 +347,25 @@ export default class UIController extends cc.Component {
 
   backToLobby() {
     cc.log("🚀 返回大廳場景 (lobby)");
+    // 如果有掛載 Loading Prefab，就動態生成並播放轉場動畫
+    if (this.prefab_loading) {
+      let loadingNode = cc.instantiate(this.prefab_loading);
+      // 確保加在最上層
+      if (cc.Canvas.instance && cc.Canvas.instance.node) {
+        cc.Canvas.instance.node.addChild(loadingNode, 999);
+      } else {
+        this.node.addChild(loadingNode, 999);
+      }
+
+      let loadingCtrl = loadingNode.getComponent("LoadingCtrl");
+      if (loadingCtrl) {
+        // 從 LoadingCtrl 呼叫轉場，它帶有 opacity 動畫與 preload 機制
+        loadingCtrl.showLoading("lobby");
+        return;
+      }
+    }
+
+    // Fallback: 如果沒有掛載 Prefab，就直接硬轉場
     cc.director.loadScene("lobby");
   }
 
