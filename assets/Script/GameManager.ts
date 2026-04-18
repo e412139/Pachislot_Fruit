@@ -82,21 +82,9 @@ export default class GameManager extends cc.Component {
       this.spinParticle.stopSystem();
     }
 
-    // // 解決瀏覽器 Autoplay 限制：監聽第一次點擊或觸摸畫面即播放音樂
-    // // const playInitialBGM = () => {
-    // //   if (this.audioService) this.audioService.playNormalBGM();
-    // //   cc.game.canvas.removeEventListener('mousedown', playInitialBGM);
-    // //   cc.game.canvas.removeEventListener('touchstart', playInitialBGM);
-    // // };
-    // cc.game.canvas.addEventListener('mousedown', playInitialBGM);
-    // cc.game.canvas.addEventListener('touchstart', playInitialBGM);
-
-    // // 啟動一般模式背景音樂
-    // this.scheduleOnce(() => {
     if (this.audioService) {
       this.audioService.playNormalBGM();
     }
-    // }, 0.5);
   }
 
   onDestroy() {

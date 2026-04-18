@@ -21,7 +21,8 @@ export default class AudioService extends cc.Component {
     /** 播放一般模式背景音樂 (放鬆) */
     playNormalBGM() {
         if (!this.bgmNormal) return;
-        cc.audioEngine.stopMusic();
+        // 若已在播放中就不重播，避免瀏覽器 autoplay 解鎖時重複觸發
+        if (cc.audioEngine.isMusicPlaying()) return;
         cc.audioEngine.playMusic(this.bgmNormal, true);
     }
 

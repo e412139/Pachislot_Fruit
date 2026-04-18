@@ -112,26 +112,10 @@ export default class SlotGameCtrl extends cc.Component {
         // 強制由程式碼接管 Auto Spin 選單按鈕，無視編輯器的 Bug
         this.bindAutoSpinButtons();
 
-        // 播放一般模式 BGM (考量瀏覽器限制，增加一次性點擊啟動機制)
-        // if (this.bgmNormal) {
-        //     const playBGM = () => {
-        //         if (cc.audioEngine.getState(cc.audioEngine.getMusicVolume()) !== cc.audioEngine.AudioState.PLAYING) {
-        //             cc.audioEngine.playMusic(this.bgmNormal, true);
-        //         }
-        //         // 移除監聽
-        //         cc.game.canvas.removeEventListener('mousedown', playBGM);
-        //         cc.game.canvas.removeEventListener('touchstart', playBGM);
-        //     };
-        //     cc.game.canvas.addEventListener('mousedown', playBGM);
-        //     cc.game.canvas.addEventListener('touchstart', playBGM);
-
-        //     // 嘗試播放 (延遲 0.5 秒，配合轉場感)
-        //     this.scheduleOnce(() => {
-        if (!cc.audioEngine.isMusicPlaying()) {
+        // 既然在 Lobby 已經提前解鎖，進場景就可以毫無顧忌地直接播放了
+        if (this.bgmNormal && !cc.audioEngine.isMusicPlaying()) {
             cc.audioEngine.playMusic(this.bgmNormal, true);
         }
-        //     }, 0.5);
-        // }
     }
 
     onDestroy() {

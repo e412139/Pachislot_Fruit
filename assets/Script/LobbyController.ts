@@ -17,7 +17,8 @@ export default class LobbyController extends cc.Component {
   }
 
   enterGame() {
-    // 柏青
+    this.unlockAudio(); // 趁著玩家點擊按鈕的瞬間，直接解鎖全域音訊
+
     if (this._loadingCtrl) {
       this._loadingCtrl.showLoading("game");
     } else {
@@ -26,6 +27,8 @@ export default class LobbyController extends cc.Component {
   }
 
   enterSlot() {
+    this.unlockAudio(); // 趁著玩家點擊按鈕的瞬間，直接解鎖全域音訊
+
     if (this._loadingCtrl) {
       this._loadingCtrl.showLoading("slot");
     } else {
@@ -33,4 +36,17 @@ export default class LobbyController extends cc.Component {
     }
   }
 
+  /**
+   * 利用玩家在首頁真實點了按鈕的「當下」，同步解鎖 Web Audio Context。
+   * 只要解鎖這一次，後面轉場完就直接播音樂，Safari 也不會再阻擋！
+   */
+  private unlockAudio() {
+    if (cc.sys.isBrowser) {
+        let context = (cc.sys as any).__audioSupport?.context;
+        if (context && context.state === 'suspended') {
+            cc.log("🔓 [Lobby] 藉由點擊按鈕，預先喚醒 Safari Web Audio Context");
+            context.resume();
+        }
+    }
+  }
 }
