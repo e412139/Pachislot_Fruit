@@ -5,35 +5,38 @@ const { ccclass, property } = cc._decorator;
 @ccclass
 export default class LobbyController extends cc.Component {
 
-  @property(cc.Node)
-  node_liading: cc.Node = null;
-
-  private _loadingCtrl: LoadingCtrl = null;
-
-  onLoad() {
-    if (this.node_liading) {
-      this._loadingCtrl = this.node_liading.getComponent(LoadingCtrl);
-    }
-  }
+  @property(cc.Prefab)
+  prefab_loading: cc.Prefab = null;
 
   enterGame() {
     this.unlockAudio(); // 趁著玩家點擊按鈕的瞬間，直接解鎖全域音訊
-
-    if (this._loadingCtrl) {
-      this._loadingCtrl.showLoading("game");
-    } else {
-      cc.director.loadScene("game");
-    }
+    this.showLoadingTransition("game");
   }
 
   enterSlot() {
     this.unlockAudio(); // 趁著玩家點擊按鈕的瞬間，直接解鎖全域音訊
+    this.showLoadingTransition("slot");
+  }
 
-    if (this._loadingCtrl) {
-      this._loadingCtrl.showLoading("slot");
-    } else {
-      cc.director.loadScene("slot");
+  private showLoadingTransition(sceneName: string) {
+    if (this.prefab_loading) {
+      let loadingNode = cc.instantiate(this.prefab_loading);
+
+      if (cc.Canvas.instance && cc.Canvas.instance.node) {
+        cc.Canvas.instance.node.addChild(loadingNode, 999);
+      } else {
+        this.node.addChild(loadingNode, 999);
+      }
+
+      let loadingCtrl = loadingNode.getComponent("LoadingCtrl");
+      if (loadingCtrl) {
+        loadingCtrl.showLoading(sceneName);
+        return;
+      }
     }
+
+    // 如果沒有掛載 Prefab，就直接硬轉場
+    cc.director.loadScene(sceneName);
   }
 
   /**
@@ -42,11 +45,11 @@ export default class LobbyController extends cc.Component {
    */
   private unlockAudio() {
     if (cc.sys.isBrowser) {
-        let context = (cc.sys as any).__audioSupport?.context;
-        if (context && context.state === 'suspended') {
-            cc.log("🔓 [Lobby] 藉由點擊按鈕，預先喚醒 Safari Web Audio Context");
-            context.resume();
-        }
+      let context = (cc.sys as any).__audioSupport?.context;
+      if (context && context.state === 'suspended') {
+        cc.log("🔓 [Lobby] 藉由點擊按鈕，預先喚醒 Safari Web Audio Context");
+        context.resume();
+      }
     }
   }
 }
