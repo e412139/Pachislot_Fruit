@@ -1,5 +1,5 @@
 // SlotGameCtrl.ts
-// Alchemy Slot — 主控制器（5×4 / 243 Ways）
+// Alchemy Slot — 主控制器（5×4 / 1024 Ways）
 // 掛載位置：node_SlotGame（主節點）
 //
 // Inspector 連結一覽：
