@@ -21,6 +21,14 @@ export default class SlotReelCtrl extends cc.Component {
     @property(cc.Prefab)
     symbolPrefab: cc.Prefab = null;
 
+    /**
+    * 動態變更滾輪轉速 (px/s)
+    * @param newSpeed 目標速度
+    */
+    setSpeed(newSpeed: number) {
+        this.speed = newSpeed;
+    }
+
     // ─── 私有狀態 ────────────────────────────────────────────
     private symbols: cc.Node[] = [];
     private speed: number = 1500;    // px/s

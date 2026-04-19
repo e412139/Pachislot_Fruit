@@ -44,6 +44,9 @@ export default class SlotGameCtrl extends cc.Component {
     @property(CoinSpawner)
     coinSpawner: CoinSpawner = null;
 
+    @property(cc.Toggle)
+    toggleSpeed: cc.Toggle = null;
+
     @property(cc.Node)
     btn_spinNode: cc.Node = null;
 
@@ -271,16 +274,22 @@ export default class SlotGameCtrl extends cc.Component {
             cc.log("🎲 隨機盤面:", JSON.stringify(this.spinMatrix));
         }
 
+        // 讀取快轉狀態並同步給管理器
+        const isQuickSpin = this.toggleSpeed ? this.toggleSpeed.isChecked : false;
+        this.reelManager.setQuickSpinMode(isQuickSpin);
+
         // 開始旋轉
         this.reelManager.spinAll();
 
-        // 1 秒後觸發停輪（依序每 0.2s 停一個 Reel）
+        // 依據是否快轉，控制旋轉持續的時間
+        const waitToStop = isQuickSpin ? 0.2 : 1.0;
+
         this.scheduleOnce(() => {
             this.phase = SlotGamePhase.STOPPING;
             this.reelManager.stopAll(this.spinMatrix, () => {
                 this.onAllReelsStopped();
             });
-        }, 1.0);
+        }, waitToStop);
     }
 
     private onAllReelsStopped() {
@@ -390,10 +399,14 @@ export default class SlotGameCtrl extends cc.Component {
             cc.log(`🔄 [AutoSpin] 扣除一次, 剩下: ${this.autoSpinCount}`);
         }
 
+        const isQuickSpin = this.toggleSpeed ? this.toggleSpeed.isChecked : false;
+
         // 大獎等久一點，讓玩家看完動畫
         let delay = 1.0;
         if (totalMultiplier > 0) {
-            delay = totalMultiplier >= BIG_WIN_THRESHOLD ? 3.0 : 1.6;
+            delay = totalMultiplier >= BIG_WIN_THRESHOLD ? 3.0 : (isQuickSpin ? 0.6 : 1.6);
+        } else {
+            delay = isQuickSpin ? 0.3 : 1.0;
         }
 
         cc.log(`⏳ [AutoSpin] 準備等待 ${delay} 秒後觸發下一次 onSpinClick`);

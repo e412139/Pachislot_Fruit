@@ -10,8 +10,7 @@ import SlotReelCtrl from "./SlotReelCtrl";
 
 const { ccclass, property } = cc._decorator;
 
-// 各滾輪停輪延遲（秒）：業界標準做法
-const REEL_STOP_DELAYS = [0.0, 0.2, 0.4, 0.6, 0.8];
+// 各滾輪停輪延遲（秒）：改為內部變數管理
 
 @ccclass
 export default class SlotReelManager extends cc.Component {
@@ -22,6 +21,10 @@ export default class SlotReelManager extends cc.Component {
 
     @property([SlotReelCtrl])
     reels: SlotReelCtrl[] = [];
+
+    private isQuickSpin: boolean = false;
+    private normalStopDelays = [0.0, 0.2, 0.4, 0.6, 0.8];
+    private quickStopDelays = [0.0, 0.0, 0.0, 0.0, 0.0]; // 快速轉輪時不等待，同時發出停輪指令
 
     // ─── 生命週期 ────────────────────────────────────────────
 
@@ -42,9 +45,20 @@ export default class SlotReelManager extends cc.Component {
         });
     }
 
-    // ─── 公開介面 ────────────────────────────────────────────
+    /** 
+     * 設定快速旋轉模式狀態，並將速度參數派發給所有 Reel 
+     */
+    setQuickSpinMode(isQuick: boolean) {
+        this.isQuickSpin = isQuick;
+        this.reels.forEach(r => {
+            if (r) {
+                // 快速: 3500px/s, 一般: 1500px/s
+                r.setSpeed(isQuick ? 3500 : 1500);
+            }
+        });
+    }
 
-    /** 所有滾輪同時開始旋轉 */
+    /** 所以滾輪同時開始旋轉 */
     spinAll() {
         this.reels.forEach(r => r.spin());
     }
@@ -57,9 +71,10 @@ export default class SlotReelManager extends cc.Component {
     stopAll(matrix: SlotSymbolID[][], onAllStopped: () => void) {
         let stoppedCount = 0;
         const total = this.reels.length;
+        const delays = this.isQuickSpin ? this.quickStopDelays : this.normalStopDelays;
 
         this.reels.forEach((reel, i) => {
-            const delay = REEL_STOP_DELAYS[i] ?? 0;
+            const delay = delays[i] ?? 0;
             this.scheduleOnce(() => {
                 reel.stop(matrix[i], () => {
                     stoppedCount++;
