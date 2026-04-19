@@ -38,6 +38,9 @@ export default class GameManager extends cc.Component {
   @property(cc.Node)
   btn_spinNode: cc.Node = null; // 綁定那個圓圓的大 Spin 按鈕，用來掛載原生觸控(長按)事件
 
+  @property(cc.AudioClip)
+  reelStopAudio: cc.AudioClip = null; // 停輪音效
+
   @property(cc.ParticleSystem)
   spinParticle: cc.ParticleSystem = null; // 粒子特效元件，用來控制開始噴發或停止
 
@@ -213,7 +216,7 @@ export default class GameManager extends cc.Component {
 
     this.scheduleOnce(() => {
       this.stopReels();
-    }, 1);
+    }, 1.0);
   }
 
   stopReels() {
@@ -221,11 +224,20 @@ export default class GameManager extends cc.Component {
     this.state = GameState.STOPPING;
 
     let stoppedCount = 0;
+    let hasPlayedSound = false; // 控制同時停止時只發出一次聲音
 
     this.reels.forEach((r, i) => {
       cc.log(`📌 Stopping reel ${i} with target:`, this.spinResult[i]);
       r.stop(this.spinResult[i], () => {
         stoppedCount++;
+        
+        // ---- 播放音效邏輯 ----
+        // 由於三根轉輪幾乎同時發出停止命令、也會同時停下，為了不疊音只播放一次
+        if (this.reelStopAudio && !hasPlayedSound) {
+          cc.audioEngine.playEffect(this.reelStopAudio, false);
+          hasPlayedSound = true;
+        }
+
         if (stoppedCount === this.reels.length) {
           cc.log("💯 All reels have fully stopped! Triggering onResult instantly.");
           this.onResult();

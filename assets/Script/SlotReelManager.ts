@@ -22,6 +22,9 @@ export default class SlotReelManager extends cc.Component {
     @property([SlotReelCtrl])
     reels: SlotReelCtrl[] = [];
 
+    @property(cc.AudioClip)
+    reelStopAudio: cc.AudioClip = null;
+
     private isQuickSpin: boolean = false;
     private normalStopDelays = [0.0, 0.2, 0.4, 0.6, 0.8];
     private quickStopDelays = [0.0, 0.0, 0.0, 0.0, 0.0]; // 快速轉輪時不等待，同時發出停輪指令
@@ -72,12 +75,26 @@ export default class SlotReelManager extends cc.Component {
         let stoppedCount = 0;
         const total = this.reels.length;
         const delays = this.isQuickSpin ? this.quickStopDelays : this.normalStopDelays;
+        let hasPlayedQuickSound = false;
 
         this.reels.forEach((reel, i) => {
             const delay = delays[i] ?? 0;
             this.scheduleOnce(() => {
                 reel.stop(matrix[i], () => {
                     stoppedCount++;
+                    
+                    // --- 播放停止音效機制 ---
+                    if (this.reelStopAudio) {
+                        if (this.isQuickSpin) {
+                           if (!hasPlayedQuickSound) {
+                               cc.audioEngine.playEffect(this.reelStopAudio, false);
+                               hasPlayedQuickSound = true;
+                           }
+                        } else {
+                           cc.audioEngine.playEffect(this.reelStopAudio, false);
+                        }
+                    }
+
                     cc.log(`🛑 Reel ${i} 停止（${stoppedCount}/${total}）`);
                     if (stoppedCount >= total) {
                         cc.log("💯 所有滾輪已停止");
