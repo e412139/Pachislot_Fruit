@@ -295,6 +295,48 @@ export default class SlotGameCtrl extends cc.Component {
     private onAllReelsStopped() {
         this.phase = SlotGamePhase.RESULT;
 
+        // 1. 檢查魔法門擴展條件
+        const magicDoorCols: number[] = [];
+        this.spinMatrix.forEach((col, idx) => {
+            if (col.includes(SlotSymbolID.MAGIC_DOOR)) {
+                magicDoorCols.push(idx);
+            }
+        });
+
+        // 判斷是否達成擴展門檻 (≥ 3 根轉輪)
+        if (magicDoorCols.length >= 3) {
+            this.handleMagicDoorExpansion(magicDoorCols);
+            return; // 等擴展結束再結算
+        }
+
+        // --- 若無擴展，直接進入原本的對獎流程 ---
+        this.processWaysResult();
+    }
+
+    private handleMagicDoorExpansion(cols: number[]) {
+        cc.log(`🚪 觸發魔法門擴展！共 ${cols.length} 輪`);
+
+        // 1. 決定變身的幸運圖形 (限定 S1~A 或 WILD/BOTTLE)
+        const allowedRevealSymbols = [
+            SlotSymbolID.S1, SlotSymbolID.S2, SlotSymbolID.S3, SlotSymbolID.S4, SlotSymbolID.S5,
+            SlotSymbolID.TEN, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K, SlotSymbolID.A,
+            SlotSymbolID.WILD
+        ];
+        if (this.isFreeGame) {
+            allowedRevealSymbols.push(SlotSymbolID.BOTTLE);
+        }
+
+        const luckySymbol = allowedRevealSymbols[Math.floor(Math.random() * allowedRevealSymbols.length)];
+        cc.log(`✨ 魔法門決定揭曉變成圖標：${SlotSymbolID[luckySymbol]}`);
+
+        // 2. 呼叫 ReelManager 播放動畫，並傳遞矩陣供其修改
+        this.reelManager.playMagicDoorExpansion(cols, luckySymbol, this.spinMatrix, () => {
+            // 3. 動畫結束，盤面已就緒，接續對獎
+            this.processWaysResult();
+        });
+    }
+
+    private processWaysResult() {
         const { totalMultiplier, results, winPositions } =
             SlotMath.calculateWays(this.spinMatrix);
 
@@ -688,7 +730,7 @@ export default class SlotGameCtrl extends cc.Component {
         ]);
     }
 
-    /** 測試 Super Win (>=100x)：塞滿 5 輪 S1 確保 100x 中獎 */
+    /** 測試超級大獎 (Super Win: >=100x)：塞滿 5 輪 S1 確保 100x 中獎 */
     forceSuperWin() {
         const T = SlotSymbolID.S1;
         this.triggerTestMatrix([
@@ -705,6 +747,23 @@ export default class SlotGameCtrl extends cc.Component {
         const W = SlotSymbolID.WILD;
         this.triggerTestMatrix([
             [W, W, W, W], [W, W, W, W], [W, W, W, W], [W, W, W, W], [W, W, W, W]
+        ]);
+    }
+
+    /** 測試魔法門擴展：強制 1, 4, 5 輪出現巨型魔法門，並保證中獎 */
+    forceMagicDoor() {
+        const M = SlotSymbolID.MAGIC_DOOR;
+        const A = SlotSymbolID.A;
+        const W = SlotSymbolID.WILD;
+
+        // 刻意寫死 3 個 Reel 出現連續的 MAGIC_DOOR
+        // 第 2, 3 輪塞入 WILD 確保不管揭曉什麼圖標都能連線中大獎
+        this.triggerTestMatrix([
+            [M, M, M, A], // Reel 0 (前3格被門蓋住)
+            [A, W, A, A], // Reel 1 (塞一個 WILD 確保中獎)
+            [A, W, A, A], // Reel 2 (塞一個 WILD 確保中獎)
+            [A, A, M, M], // Reel 3 (後2格被門蓋住)
+            [M, M, M, M]  // Reel 4 (全滿)
         ]);
     }
 }

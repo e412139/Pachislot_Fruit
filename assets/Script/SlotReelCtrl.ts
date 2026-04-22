@@ -2,7 +2,7 @@
 // Alchemy Slot — 單一滾輪控制（4 rows）
 // 掛載位置：每個 node_SlotReel_* 節點
 // 同節點需加 Mask 組件（矩形，高度 = ROW_COUNT × SYMBOL_HEIGHT）
-// Inspector 連結：symbolPrefab
+// Inspector 連結：symbolPrefab, magicDoorPrefab
 
 import { SlotSymbolID } from "./SlotSymbolDef";
 import SlotSymbolCtrl from "./SlotSymbolCtrl";
@@ -21,72 +21,126 @@ export default class SlotReelCtrl extends cc.Component {
     @property(cc.Prefab)
     symbolPrefab: cc.Prefab = null;
 
-    /**
-    * 動態變更滾輪轉速 (px/s)
-    * @param newSpeed 目標速度
-    */
+    @property(cc.Prefab)
+    magicDoorPrefab: cc.Prefab = null;
+
     setSpeed(newSpeed: number) {
         this.speed = newSpeed;
     }
 
     // ─── 私有狀態 ────────────────────────────────────────────
     private symbols: cc.Node[] = [];
-    private speed: number = 1500;    // px/s
+    private speed: number = 1500;
     private isSpinning: boolean = false;
     private isStopping: boolean = false;
     private offsetY: number = 0;
     private targetSymbols: SlotSymbolID[] = [];
-    private stoppingIndex: number = -1;      // 停輪時由下往上填入 target
+    private stoppingIndex: number = -1;
     private stopCallback: Function = null;
 
-    // 注意：initSymbols() 由 SlotReelManager.onLoad() 呼叫，不在 onLoad() 自動執行
+    // ★ 巨型門：掛在 this.node（reel 節點），跟著 offsetY 同步滾動
+    giantDoorNode: cc.Node = null;
+    private doorBaseY: number = 0;  // snap 完成時門的 Y 值
 
-    // ─── 初始化（由 SlotReelManager 呼叫）──────────────────────────
+    // ─── 初始化 ──────────────────────────────────────────────
 
     initSymbols() {
         this.node.removeAllChildren();
         this.symbols = [];
         this.offsetY = 0;
+        this._destroyGiantDoor();
 
-        // 可見格(ROW_COUNT) + 上方緩衝1格 + 下方緩衝1格 = ROW_COUNT + 2
-        const count = ROW_COUNT + 2;
+        const count = ROW_COUNT + 2; // 上下各一格緩衝
         for (let i = 0; i < count; i++) {
             const node = cc.instantiate(this.symbolPrefab);
             node.parent = this.node;
-            node.y = TOP_Y + SYMBOL_HEIGHT - i * SYMBOL_HEIGHT; // 第 0 個在最上緩衝
+            node.y = TOP_Y + SYMBOL_HEIGHT - i * SYMBOL_HEIGHT;
             const comp = node.getComponent(SlotSymbolCtrl);
-            if (comp) {
-                comp.setSymbol(Math.floor(Math.random() * 10) as SlotSymbolID);
-            }
+            if (comp) comp.setSymbol(Math.floor(Math.random() * 10) as SlotSymbolID);
             this.symbols.push(node);
         }
     }
 
     // ─── 公開介面 ────────────────────────────────────────────
 
-    /** 開始旋轉 */
     spin() {
         this.stopAllWinAnims();
         this.isSpinning = true;
         this.isStopping = false;
         this.stoppingIndex = -1;
         this.offsetY = 0;
+
+        for (const sym of this.symbols) {
+            if (sym) {
+                const comp = sym.getComponent(SlotSymbolCtrl);
+                if (comp) comp.setHidden(false);
+            }
+        }
+
+        // 每次新的 spin 銷毀舊門
+        this._destroyGiantDoor();
     }
 
-    /**
-     * 停輪
-     * @param targetSymbols 目標盤面（長度需為 ROW_COUNT）
-     * @param callback 完全停止並 snap 對齊後呼叫
-     */
     stop(targetSymbols: SlotSymbolID[], callback?: Function) {
         this.targetSymbols = targetSymbols;
         this.isStopping = true;
-        this.stoppingIndex = ROW_COUNT - 1;  // 從最下方的 row 開始往上填
+        this.stoppingIndex = ROW_COUNT - 1;
         this.stopCallback = callback || null;
+
+        // ★ 如果目標有門，立刻生成並讓門跟著轉輪一起滾進來
+        const hasDoor = targetSymbols.some(s => s === SlotSymbolID.MAGIC_DOOR);
+        if (hasDoor && this.magicDoorPrefab && !this.giantDoorNode) {
+            this._spawnScrollingDoor(targetSymbols);
+        }
+    }
+
+    /**
+     * 在 stop() 呼叫時立即生成巨型門，掛在 reel.node 上，
+     * 從可見區下方出發，跟著 offsetY 一起往上滾動到 doorBaseY 的位置。
+     */
+    private _spawnScrollingDoor(targetSymbols: SlotSymbolID[]) {
+        let firstDoorRow = -1;
+        let doorCount = 0;
+        for (let r = 0; r < ROW_COUNT; r++) {
+            if (targetSymbols[r] === SlotSymbolID.MAGIC_DOOR) {
+                if (firstDoorRow === -1) firstDoorRow = r;
+                doorCount++;
+            }
+        }
+        if (firstDoorRow < 0) return;
+
+        let startRowOffset = 0;
+        if (firstDoorRow === 0) {
+            if (doorCount === 2) startRowOffset = -2;
+            if (doorCount === 3) startRowOffset = -1;
+            if (doorCount === 4) startRowOffset = 0;
+        } else if (firstDoorRow > 0) {
+            startRowOffset = firstDoorRow;
+        }
+        
+        this.doorBaseY = startRowOffset * -100;
+
+        // 目前轉輪正在滾，所以門從「doorBaseY - 幾格」的地方出發，跟著往上滾
+        // 偏移量用 offsetY 繼續推算，這裡只需設好起始 Y
+        // 只要 offsetY 一直往負走，門的 doorBaseY + offsetY 就會接近 doorBaseY
+        // 所以起始 Y 可以就直接等於 doorBaseY（之後 update 會用 doorBaseY + offsetY 更新）
+        // 但 offsetY 目前接近 0 或負值，所以門初始就會在正確位置附近，然後跟著輪子動
+        this.giantDoorNode = cc.instantiate(this.magicDoorPrefab);
+        this.giantDoorNode.parent = this.node;
+        this.giantDoorNode.x = 0;
+        this.giantDoorNode.y = this.doorBaseY + this.offsetY;
+        this.giantDoorNode.zIndex = 999;
+        cc.log(`🚪 生成巨型門 doorBaseY=${this.doorBaseY}, offsetY=${this.offsetY}`);
+    }
+
+    private _destroyGiantDoor() {
+        if (this.giantDoorNode && cc.isValid(this.giantDoorNode)) {
+            this.giantDoorNode.destroy();
+        }
+        this.giantDoorNode = null;
     }
 
     playWinAnimation(rowIndex: number) {
-        // rowIndex 0 = 最上排，對應 symbols[1]（symbols[0] 是上緩衝格）
         const node = this.symbols[rowIndex + 1];
         if (node) {
             const comp = node.getComponent(SlotSymbolCtrl);
@@ -112,10 +166,32 @@ export default class SlotReelCtrl extends cc.Component {
         return SlotSymbolID.S1;
     }
 
-    /** 取得可見區域內特定 ID 的 cc.Node */
+    forceUpdateAllSymbols(id: SlotSymbolID) {
+        for (let i = 0; i < ROW_COUNT; i++) {
+            const node = this.symbols[i + 1];
+            if (node) {
+                const comp = node.getComponent(SlotSymbolCtrl);
+                if (comp) {
+                    comp.setSymbol(id);
+                    comp.setHidden(false);
+                }
+            }
+        }
+    }
+
+    /** 瞬間強制改變所有可見格的隱藏狀態（擴展對齊動畫用） */
+    forceSetAllHidden(isHidden: boolean) {
+        for (let i = 0; i < ROW_COUNT; i++) {
+            const node = this.symbols[i + 1];
+            if (node) {
+                const comp = node.getComponent(SlotSymbolCtrl);
+                if (comp) comp.setHidden(isHidden);
+            }
+        }
+    }
+
     getSymbolNodesByID(id: SlotSymbolID): cc.Node[] {
         const nodes: cc.Node[] = [];
-        // 只掃描可見格 symbols[1] ~ symbols[ROW_COUNT]
         for (let i = 0; i < ROW_COUNT; i++) {
             const node = this.symbols[i + 1];
             if (node) {
@@ -135,41 +211,47 @@ export default class SlotReelCtrl extends cc.Component {
 
         this.offsetY -= this.speed * dt;
 
-        // 每當整體位移超過一格高度，循環滾動
         if (this.offsetY <= -SYMBOL_HEIGHT) {
             this.offsetY += SYMBOL_HEIGHT;
 
-            // 將最後一個 symbol 移到陣列最前面（循環）
             const last = this.symbols.pop();
             this.symbols.unshift(last);
 
-            // 更新新進入頂部的 symbol 內容
             const comp = this.symbols[0].getComponent(SlotSymbolCtrl);
             if (comp) {
                 if (!this.isStopping) {
-                    // 正常旋轉：隨機
                     comp.setSymbol(Math.floor(Math.random() * 10) as SlotSymbolID);
+                    comp.setHidden(false);
                 } else {
-                    // 停輪中：從下往上依序填入 target
                     if (this.stoppingIndex >= 0) {
-                        comp.setSymbol(this.targetSymbols[this.stoppingIndex]);
+                        let targetSym = this.targetSymbols[this.stoppingIndex];
+                        // 當該格被指定為大門時，大門會在這格上方，我們把格子本身的美術圖隱藏，避免重疊透視
+                        if (targetSym === SlotSymbolID.MAGIC_DOOR) {
+                            comp.setHidden(true);
+                        } else {
+                            comp.setSymbol(targetSym);
+                            comp.setHidden(false);
+                        }
                         this.stoppingIndex--;
                     } else if (this.stoppingIndex === -1) {
-                        // 再多一格緩衝（讓 target 完全進入可見區）
                         comp.setSymbol(Math.floor(Math.random() * 10) as SlotSymbolID);
-                        this.stoppingIndex--; // => -2
+                        comp.setHidden(false);
+                        this.stoppingIndex--;
                     }
                 }
             }
         }
 
         // 更新所有 symbol 的 Y 位置
-        const bufferCount = this.symbols.length;
-        for (let i = 0; i < bufferCount; i++) {
+        for (let i = 0; i < this.symbols.length; i++) {
             this.symbols[i].y = TOP_Y + SYMBOL_HEIGHT - i * SYMBOL_HEIGHT + this.offsetY;
         }
 
-        // 當 target 已全部進入且接近 snap 點時停輪
+        // ★ 門跟著 offsetY 同步移動（這就是讓它像真實 symbol 一樣滾進來的關鍵！）
+        if (this.giantDoorNode && cc.isValid(this.giantDoorNode)) {
+            this.giantDoorNode.y = this.doorBaseY + this.offsetY;
+        }
+
         if (this.isStopping && this.stoppingIndex < -1) {
             this.trySnap();
         }
@@ -178,7 +260,6 @@ export default class SlotReelCtrl extends cc.Component {
     // ─── 停輪對齊 ────────────────────────────────────────────
 
     private trySnap() {
-        // offsetY ≈ 0 時表示恰好對齊格子中心
         if (this.offsetY <= 0 && this.offsetY > -25) {
             this.snapToGrid();
         }
@@ -189,15 +270,31 @@ export default class SlotReelCtrl extends cc.Component {
         this.isStopping = false;
         this.offsetY = 0;
 
-        // 強制校正可見格（symbols[1] ~ symbols[ROW_COUNT]）
         for (let i = 0; i < ROW_COUNT; i++) {
             const comp = this.symbols[i + 1].getComponent(SlotSymbolCtrl);
-            if (comp) comp.setSymbol(this.targetSymbols[i]);
+            let symTarget = this.targetSymbols[i];
+            if (comp) {
+                if (symTarget === SlotSymbolID.MAGIC_DOOR) {
+                    comp.setHidden(true);
+                } else {
+                    comp.setSymbol(symTarget);
+                    comp.setHidden(false);
+                }
+            }
         }
 
-        // 全部 symbol 回到整齊位置
         for (let i = 0; i < this.symbols.length; i++) {
             this.symbols[i].y = TOP_Y + SYMBOL_HEIGHT - i * SYMBOL_HEIGHT;
+        }
+
+        // 也必須將門捕捉到最完美的最終網格位置
+        if (this.giantDoorNode && cc.isValid(this.giantDoorNode)) {
+            this.giantDoorNode.y = this.doorBaseY;
+        }
+
+        // ★ 門 snap 到最終精確位置
+        if (this.giantDoorNode && cc.isValid(this.giantDoorNode)) {
+            this.giantDoorNode.y = this.doorBaseY;
         }
 
         cc.log("✅ SlotReelCtrl: snap 完成");

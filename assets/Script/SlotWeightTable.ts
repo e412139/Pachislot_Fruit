@@ -16,6 +16,7 @@ export const SLOT_SYMBOL_WEIGHT: { [key: number]: number } = {
     [SlotSymbolID.WILD]: 20,
     [SlotSymbolID.SCATTER]: 15,
     [SlotSymbolID.BOTTLE]: 0,  // 普通模式不出現
+    [SlotSymbolID.MAGIC_DOOR]: 35, // 神秘門
 };
 
 // Free Game 專用權重表
@@ -33,4 +34,5 @@ export const FG_SLOT_SYMBOL_WEIGHT: { [key: number]: number } = {
     [SlotSymbolID.WILD]: 25,
     [SlotSymbolID.SCATTER]: 0,  // FG 中不出現 Scatter
     [SlotSymbolID.BOTTLE]: 30,  // FG 專用空瓶
+    [SlotSymbolID.MAGIC_DOOR]: 40, // FG 特加倍率
 };

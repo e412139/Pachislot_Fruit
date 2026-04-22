@@ -16,4 +16,5 @@ export enum SlotSymbolID {
     WILD    = 10,
     SCATTER = 11,
     BOTTLE  = 12, // Free Game 專用空瓶
+    MAGIC_DOOR = 13, // 擴充神秘門
 }

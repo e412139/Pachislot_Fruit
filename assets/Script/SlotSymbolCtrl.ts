@@ -40,6 +40,13 @@ export default class SlotSymbolCtrl extends cc.Component {
         return this.currentID;
     }
 
+    /** 隱藏或顯示此格子本身的圖片（不影響掛在上面的子節點，如巨型門） */
+    setHidden(isHidden: boolean) {
+        if (this.sprite && cc.isValid(this.sprite.node)) {
+            this.sprite.node.opacity = isHidden ? 0 : 255;
+        }
+    }
+
     /** 播放中獎閃爍動畫（scale 彈跳 + opacity 閃爍） */
     playWinAnim() {
         cc.Tween.stopAllByTarget(this.node);
@@ -72,7 +79,7 @@ export default class SlotSymbolCtrl extends cc.Component {
 
     private getSymbolName(id: SlotSymbolID): string {
         const names = ['S1', 'S2', 'S3', 'S4', 'S5',
-            'TEN', 'J', 'Q', 'K', 'A', 'WILD', '⭐', '空瓶'];
+            'TEN', 'J', 'Q', 'K', 'A', 'WILD', '⭐', '空瓶', '門'];
         return names[id] ?? '?';
     }
 }

@@ -7,6 +7,7 @@
 
 import { SlotSymbolID } from "./SlotSymbolDef";
 import SlotReelCtrl from "./SlotReelCtrl";
+import SlotMagicDoorCtrl from "./SlotMagicDoorCtrl";
 
 const { ccclass, property } = cc._decorator;
 
@@ -15,9 +16,11 @@ const { ccclass, property } = cc._decorator;
 @ccclass
 export default class SlotReelManager extends cc.Component {
 
-    /** Symbol Prefab：只需設定一次，會自動套用到全部 5 個 Reel */
     @property(cc.Prefab)
     symbolPrefab: cc.Prefab = null;
+
+    @property(cc.Prefab)
+    magicDoorPrefab: cc.Prefab = null;
 
     @property([SlotReelCtrl])
     reels: SlotReelCtrl[] = [];
@@ -40,6 +43,7 @@ export default class SlotReelManager extends cc.Component {
         this.reels.forEach((reel, i) => {
             if (reel) {
                 reel.symbolPrefab = this.symbolPrefab;
+                reel.magicDoorPrefab = this.magicDoorPrefab; // 補上這個傳遞！
                 reel.initSymbols();
                 cc.log(`✅ Reel ${i} 初始化完成`);
             } else {
@@ -82,16 +86,16 @@ export default class SlotReelManager extends cc.Component {
             this.scheduleOnce(() => {
                 reel.stop(matrix[i], () => {
                     stoppedCount++;
-                    
+
                     // --- 播放停止音效機制 ---
                     if (this.reelStopAudio) {
                         if (this.isQuickSpin) {
-                           if (!hasPlayedQuickSound) {
-                               cc.audioEngine.playEffect(this.reelStopAudio, false);
-                               hasPlayedQuickSound = true;
-                           }
+                            if (!hasPlayedQuickSound) {
+                                cc.audioEngine.playEffect(this.reelStopAudio, false);
+                                hasPlayedQuickSound = true;
+                            }
                         } else {
-                           cc.audioEngine.playEffect(this.reelStopAudio, false);
+                            cc.audioEngine.playEffect(this.reelStopAudio, false);
                         }
                     }
 
@@ -130,5 +134,75 @@ export default class SlotReelManager extends cc.Component {
             }
         });
         return nodes;
+    }
+
+    /**
+     * 播放魔法門擴展動畫
+     * @param colIndices 觸發的輪數 (例如 [0, 3, 4])
+     * @param luckySymbol 揭曉的幸運圖標
+     * @param matrix 被改寫的盤面
+     * @param onComplete 全部開門動畫完畢後呼叫
+     */
+    playMagicDoorExpansion(colIndices: number[], luckySymbol: SlotSymbolID, matrix: SlotSymbolID[][], onComplete: () => void) {
+        if (!this.magicDoorPrefab) {
+            cc.warn("⚠️ magicDoorPrefab 未設定，直接強制替換圖標");
+            colIndices.forEach(c => {
+                for (let r = 0; r < 4; r++) matrix[c][r] = luckySymbol;
+                this.reels[c].forceUpdateAllSymbols(luckySymbol);
+            });
+            onComplete();
+            return;
+        }
+
+        let completedCount = 0;
+
+        colIndices.forEach((col, idx) => {
+            const reel = this.reels[col];
+
+            // 更新算獎用的盤面陣列庫
+            for (let r = 0; r < 4; r++) matrix[col][r] = luckySymbol;
+
+            if (reel) {
+                // ★ 直接取用 SlotReelCtrl 在 stop() 時已生成並隨輪滾入的巨型門
+                const doorNode = reel.giantDoorNode;
+                if (!doorNode || !cc.isValid(doorNode)) {
+                    cc.warn(`⚠️ 輪 ${col} 找不到 giantDoorNode，直接替換圖標`);
+                    reel.forceUpdateAllSymbols(luckySymbol);
+                    completedCount++;
+                    if (completedCount === colIndices.length) onComplete();
+                    return;
+                }
+
+                // 確保此時門已在 reel.node 層
+                // （SlotReelCtrl 的 stop() 已把門掛在 this.node = reel.node）
+                let doorCtrl = doorNode.getComponent(SlotMagicDoorCtrl);
+                if (!doorCtrl) {
+                    doorCtrl = doorNode.addComponent(SlotMagicDoorCtrl);
+                }
+
+                // 給一點起步延遲製造參差不齊感
+                this.scheduleOnce(() => {
+                    // ★ 玩家強烈要求：在移動對齊動畫的瞬間，底下被波及的 4 個格子全都瞬間隱藏，
+                    // 以免半透明門滑動時看到原本的小圖標交錯！
+                    reel.forceSetAllHidden(true);
+
+                    // 目標對齊高度：0（轉輪正中央）
+                    doorCtrl.playAlignAndOpen(0, () => {
+                        // 大門全開後，底下圖標替換 (並在此方法內解除隱藏)
+                        reel.forceUpdateAllSymbols(luckySymbol);
+                        // 銷毀門節點（圖標已顯示）
+                        if (cc.isValid(doorNode)) doorNode.destroy();
+                        reel.giantDoorNode = null;
+                        completedCount++;
+                        if (completedCount === colIndices.length) {
+                            // ★ 玩家要求：在所有門都開完、圖標都換好後，多留 0.5 秒給玩家看清楚開獎結果
+                            this.scheduleOnce(() => {
+                                onComplete();
+                            }, 0.5);
+                        }
+                    });
+                }, idx * 0.1);
+            }
+        });
     }
 }

@@ -382,20 +382,108 @@ export default class GameState {
 
 ---
 
-# ⭐ 如果你要再升級（我可以幫）
-
-👉 做：
-
-* 真實 243 ways（目前是簡化版）
-* Reel Strip 控 RTP
-* Sticky Wild
-* 煉金收集系統（你原本的）
+## 換皮
+- 詢問做法，先不實作
+1. 假如今天要用 slot 場景，來做換皮的節慶遊戲"華人春節"好了
+2. 請你幫我說明以目前 slot 的架構，要如何修改，我的預想是換背景symbol、音樂、特色遊戲元素
+3. 幫我掃描看看是不是 實作2. 就可換皮了？還是還有哪些要調整？
 
 ---
 
-## 備註 
-1. 使用中文說明與對話
-2. 檔案不要重複檔名，前面一律加上 Slot<>
-3. 專案裡面有已經試作完成的 3x3 柏青遊戲，像是 spin 按鈕長按跳出選單、中大獎的動畫與音效可疑接拿來用不用再重做了
-4. 先不要做 free game 的功能，先可以正常開分做動畫效果為準
-5. 建置的檔案一樣放在 assets/Script/裡面，不要另外開資料夾
+## 📌 業界換皮實作方式
+
+> 結論：概念相同，但規模和工程化程度差很多。
+
+### 核心思路：「數學模型 ≠ 主題」
+
+業界把一款遊戲明確切成兩層：
+
+```
+┌──────────────────────────────┐
+│        Theme Layer（主題層）   │  ← 換皮的部分
+│  圖、音、動畫、UI 文字、特效     │
+├──────────────────────────────┤
+│       Math Layer（數學層）     │  ← 絕對不動
+│  RTP、賠率表、RNG、Ways 邏輯    │
+└──────────────────────────────┘
+```
+
+一套數學模型可以撐起十幾二十款遊戲，只是穿不同衣服。
+
+---
+
+### 業界做法
+
+#### 1. 資源包（Asset Bundle）驅動
+不是在 Inspector 手動換圖，而是：
+
+```
+/themes/
+  /alchemy/    ← 煉金術主題資源包
+  /cny/        ← 春節主題資源包
+  /halloween/  ← 萬聖節主題資源包
+
+// 執行時動態載入對應包
+ThemeManager.load("cny").then(() => game.start());
+```
+
+遊戲啟動時由 ThemeManager 決定載入哪包，核心邏輯完全不知道「現在是哪個主題」。
+
+#### 2. 設定檔驅動（Config-Driven）
+每個主題一個 JSON，連 RTP 微調都放在裡面：
+
+```json
+{
+  "themeID": "cny_2025",
+  "bgmNormal": "cny_bgm_normal.mp3",
+  "symbols": [
+    { "id": 0, "name": "RedEnvelope", "img": "sym_red_envelope.png" },
+    { "id": 1, "name": "Lantern",     "img": "sym_lantern.png" }
+  ],
+  "freeGame": {
+    "triggerCount": 3,
+    "spins": 8,
+    "specialMechanic": "lanternCollect"
+  }
+}
+```
+
+程式碼讀設定，**不寫死任何主題相關的字串或路徑**。
+
+#### 3. Symbol Mapping（符號映射）
+Math Layer 只認識 ID（0~12），由 ThemeManager 負責把 ID 對應到這個主題的圖與名稱。
+目前架構的 `SlotSymbolCtrl.symbolFrames[]` 已做到這件事，但是靠 Inspector 手動設定；業界是程式自動載入。
+
+#### 4. 特色機制抽象化（Mechanic Abstraction）
+BOTTLE 機制在業界叫做 **Collector Mechanic**，業界寫法：
+
+```typescript
+interface CollectorSymbol {
+  symbolID: number;
+  targetNodeName: string; // 飛向哪個 UI 元素
+  onCollect: () => void;  // 收集到時做什麼
+}
+// 春節主題換成燈籠、萬聖節換成南瓜，機制程式碼完全不改
+```
+
+---
+
+### 我們的架構 vs 業界比較
+
+| 面向 | 目前架構 | 業界標準 |
+|------|---------|--------|
+| 資源管理 | Inspector 手動拖換 | Asset Bundle 動態載入 |
+| 主題設定 | 寫死在 Prefab/Scene | JSON Config 驅動 |
+| Symbol 映射 | `symbolFrames[]` 手動對應 | ThemeManager 自動注入 |
+| 特色機制 | BOTTLE 寫死 | Mechanic 介面抽象化 |
+| 多主題共存 | 一個 Scene = 一個主題 | 一個 Scene + N 個資源包 |
+| 換皮工時 | 需要開 Creator 編輯 | 只需換資源包 + JSON |
+
+---
+
+### 要不要升級到業界等級？
+
+- **學習 / Demo 用途** → 現在的方式完全夠，不需要工程化
+- **想做成可快速換皮的產品** → 需要加 `ThemeManager` + JSON Config，把 Inspector 設定改成程式載入
+- **真正上線的商業遊戲** → 還需要 RTP 認證、亂數種子稽核等合規要求
+
