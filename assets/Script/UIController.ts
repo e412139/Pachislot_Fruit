@@ -332,8 +332,10 @@ export default class UIController extends cc.Component {
         }
       });
 
-      // 3. 載入網頁
-      this.webView.url = "data:text/html;charset=utf-8," + encodeURIComponent(this.rulesHtmlFile.text);
+      // 3. 載入網頁（使用 Base64 格式，避免 encodeURIComponent 對 Base64 圖片雙重編碼
+      // 導致字串長度暴增、圖片被截斷的問題）
+      const b64 = btoa(unescape(encodeURIComponent(this.rulesHtmlFile.text)));
+      this.webView.url = "data:text/html;charset=utf-8;base64," + b64;
     }
   }
 

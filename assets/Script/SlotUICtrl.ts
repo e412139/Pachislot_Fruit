@@ -490,10 +490,12 @@ export default class SlotUICtrl extends cc.Component {
                 if (url === "cocos://close") this.hideInfo();
             });
 
-            // 載入 Data URI
-            const uri = "data:text/html;charset=utf-8," + encodeURIComponent(this.rulesHtmlFile.text);
+            // 載入 Data URI（使用 Base64 格式，避免 encodeURIComponent 對 Base64 圖片雙重編碼
+            // 導致字串長度暴增、圖片被截斷的問題）
+            const b64 = btoa(unescape(encodeURIComponent(this.rulesHtmlFile.text)));
+            const uri = "data:text/html;charset=utf-8;base64," + b64;
             this.webView.url = uri;
-            cc.log(`🌐 WebView 網址已設定 (長度: ${uri.length})`);
+            cc.log(`🌐 WebView 網址已設定 (Base64 長度: ${b64.length})`);
         }
     }
 
