@@ -156,6 +156,16 @@ export default class SlotReelManager extends cc.Component {
 
         let completedCount = 0;
 
+        // 1. 更新矩陣：將指定輪的大門位置替換為幸運圖標
+        // ★ 業界進階優化：如果大門不是從第 0 輪開始（斷聯），
+        // 則自動將前面的輪軸補上 WILD，確保 100% 必定中大獎！
+        const firstDoorCol = Math.min(...colIndices);
+        for (let c = 0; c < firstDoorCol; c++) {
+            cc.log(`🩹 修正斷聯：第 ${c} 輪補上 WILD`);
+            for (let r = 0; r < 4; r++) matrix[c][r] = SlotSymbolID.WILD;
+            this.reels[c].forceUpdateAllSymbols(SlotSymbolID.WILD);
+        }
+
         colIndices.forEach((col, idx) => {
             const reel = this.reels[col];
 

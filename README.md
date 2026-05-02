@@ -150,37 +150,42 @@ forceFreeGame()   // 強制觸發 3 Scatter 中獎流程
 
 - **格局**：5 滾輪 × 4 格（5×4）
 - **連線規則**：**1024 Ways**（不計固定連線，只要同一符號從第 1 輪開始每輪至少出現 1 格即得分；5 輪 × 每輪最多 4 格符合 = 4⁵ = 1024）
-- **起始籌碼**：1000 信用點，每局下注 10 點
-- **特色**：煉金鍋裝飾動畫、BOTTLE 空瓶倍率累積機制、魔法圈轉場特效、Free Game 8 局
+- **起始籌碼**：1000 信用點，每局下注 **10** 點 (Fixed Bet)
+- **核心特色**：
+    - **1024 Ways**：全路徑連線算法，移除傳統線路限制。
+    - **神秘擴展 (Mystery Expansion)**：隨機觸發的 3-Reel 垂直擴展機制，增加盤面覆蓋率。
+    - **保底連線機制 (Guaranteed Win Mechanism)**：技術亮點！若神秘門功能觸發卻未中獎，系統自動補入 WILD 確保 1024-Ways 連線。
+    - **BOTTLE 煉金倍率**：Free Game 專用機制，倍數可隨空瓶出現無限累積。
 
 ### 技術架構
 
 #### 核心組件關係圖
 
 ```
-SlotGameCtrl（主控制器）
-├── SlotReelManager             （管理 5 個滾輪）
-│   └── SlotReelCtrl × 5       （單一滾輪，4 rows + 上下緩衝格）
-│       └── SlotSymbolCtrl × 6 （每格 Symbol 渲染與動畫）
-├── SlotMath                    （243 Ways 賠率計算靜態函式庫）
-├── SlotRNG                     （加權亂數，Normal/FreeGame 雙權重表）
-├── SlotUICtrl                  （全部 UI 視覺控制）
-├── SlotPotCtrl                 （煉金鍋裝飾動畫）
-└── CoinSpawner                 （大獎金幣噴發，與 Game 1 共用）
+SlotGameCtrl（主控制器 / 狀態機）
+├── SlotReelManager             （管理 5 個滾輪序列與同步）
+│   └── SlotReelCtrl × 5       （單一滾輪邏輯，含 0.5s 視認延遲優化）
+│       ├── SlotSymbolCtrl × 6 （每格渲染與 WinAnim 特效）
+│       └── SlotMagicDoorCtrl  （神秘門擴展動畫、粒子效果與回調安全）
+├── SlotMath                    （1024 Ways 賠率計算與中獎路徑掃描）
+├── SlotRNG                     （加權亂數系統，目標觸發率校準至 1/50）
+├── SlotUICtrl                  （UI 視覺、WebView 說明、大獎分級演出）
+├── SlotPotCtrl                 （煉金鍋視覺反饋與冒煙特效）
+└── CoinSpawner                 （高效率金幣物件池 Prefab Spawner）
 ```
 
 #### 腳本說明
 
-| 檔案 | 責任 |
+| 檔案 | 技術亮點 / 職責 |
 |------|------|
-| `SlotGameCtrl.ts` | **主控制器**。管理 `SlotGamePhase` 狀態機（IDLE → SPINNING → STOPPING → RESULT）、觸控、Auto Spin、Free Game 全流程、BOTTLE 倍率 |
-| `SlotReelManager.ts` | 管理 5 個 `SlotReelCtrl`，統一呼叫 `spinAll()`、`stopAll()`（各輪依 `REEL_STOP_DELAYS[0.0, 0.2, 0.4, 0.6, 0.8]` 秒差停輪） |
-| `SlotReelCtrl.ts` | 單一 4-Row 滾輪。維護 ROW_COUNT+2 個 Symbol 節點（上下各加 1 格緩衝）；以循環陣列 + `offsetY` 每幀滾動；停輪時由下往上填入目標 Symbol，snap 對齊後回調 |
-| `SlotSymbolCtrl.ts` | 單格 Symbol 渲染（切換 SpriteFrame）與閃爍中獎動畫（`playWinAnim` / `stopWinAnim`） |
-| `SlotMath.ts` | **純靜態計算**。`calculateWays()` 對 10 種有賠率 Symbol 計算 3/4/5 輪最長連線 Ways 數與總倍率；`checkScatterTrigger()` 確認第 1、3、5 輪（index 0、2、4）各有 SCATTER |
-| `SlotRNG.ts` | 加權亂數生成器。Normal/FreeGame 各有獨立權重表；`generateMatrix(isFreeGame)` 產生 5×4 矩陣 |
-| `SlotWeightTable.ts` | 定義 Normal 與 FreeGame 兩套權重表（普通模式 BOTTLE 不出現；FG 模式 SCATTER 不出現，BOTTLE 出現） |
-| `SlotPaytable.ts` | 各 Symbol 賠率表（3/4/5 輪），以物件字面量定義 |
+| `SlotGameCtrl.ts` | **中樞狀態機**。嚴謹管理 IDLE → SPINNING → RESULT 循環。特別實作了「輸入鎖定」與「Callback 監測」，防止連點導致的狀態錯亂。 |
+| `SlotReelManager.ts` | **並行處理**。除了同步 5 輪啟動外，更負責在 `MagicDoor` 觸發時，動態改寫盤面矩陣執行 **WILD 注入 (Connection Repair)**。 |
+| `SlotReelCtrl.ts` | **滾輪控制核心**。支持單一 4-Row 滾輪與緩衝格管理。引入了 **Snap 對齊與回調機制**，確保動畫與邏輯高度同步。 |
+| `SlotSymbolCtrl.ts` | **符號渲染與動畫**。封裝了 Symbol 的 Sprite 狀態切換與中獎閃爍特效，支持動態加載。 |
+| `SlotMagicDoorCtrl.ts` | **動畫同步**。處理神祕門從 1x1 擴展至 1x4 的視覺動畫，並引入 `0.5s` 的視覺停留，確保玩家能看清轉化符號。 |
+| `SlotMath.ts` | **1024 Ways 高效掃描**。採用權重優先算法，搜尋最長連線路徑，並處理 WILD 在多路徑下的倍增邏輯。 |
+| `SlotRNG.ts` | **數值校準**。不僅是亂數，更透過加權表將神祕門的單軸出現率精確校準，達成約 **1/50** 的大功能觸發頻率。 |
+| `SlotUICtrl.ts` | **分級演出邏輯**。根據總贏分倍數，精確切換 BIG(50x)、MEGA(100x)、SUPER(200x) 三個等級的演出效果。 |
 | `SlotSymbolDef.ts` | `SlotSymbolID` 列舉（S1~S5、TEN/J/Q/K/A、WILD、SCATTER、BOTTLE） |
 | `SlotGameState.ts` | `SlotGamePhase` 列舉（IDLE、SPINNING、STOPPING、RESULT） |
 | `SlotPotCtrl.ts` | 煉金鍋裝飾動畫（`playIdle`/`playSpin`/`playWin(isBigWin)`/`stopAll`），純視覺、不參與業務邏輯 |
@@ -194,11 +199,11 @@ SlotGameCtrl（主控制器）
 
 | 符號 | 3 輪 | 4 輪 | 5 輪 |
 |------|------|------|------|
-| S1（液體，最稀有）| 15x | 40x | 100x |
-| S2（藥草）| 10x | 25x | 60x |
-| S3（搗藥器）| 8x | 16x | 40x |
-| S4（玻璃瓶）| 6x | 12x | 25x |
-| S5（蒸餾器）| 5x | 10x | 20x |
+| S1（藥水）| 15x | 40x | 100x |
+| S2（蒸餾器）| 10x | 25x | 60x |
+| S3（研磨缽）| 8x | 16x | 40x |
+| S4（魔法秘方）| 6x | 12x | 25x |
+| S5（藥草）| 5x | 10x | 20x |
 | A | 5x | 10x | 20x |
 | K | 4x | 8x | 15x |
 | Q | 4x | 8x | 15x |
@@ -208,13 +213,15 @@ SlotGameCtrl（主控制器）
 | SCATTER | — | — | 觸發 Free Game（第 1、3、5 輪各出現） |
 | BOTTLE | — | — | Free Game 專用，飛向倍率計數器 +1 |
 
-BigWin 觸發門檻：**totalMultiplier ≥ 20**（`BIG_WIN_THRESHOLD`）
+#### 大獎分級演出門檻
 
-| 倍率 | 標題圖 |
-|------|--------|
-| ≥ 20x | Big Win |
-| ≥ 50x | Mega Win |
-| ≥ 100x | Super Win |
+為優化遊戲節奏，避免過度演出，調整門檻如下：
+
+| 倍率 (Total Multiplier) | 演出標題 | 視覺反饋 |
+|------|--------|--------|
+| **≥ 50x** | **BIG WIN** | 金幣噴發 + 標題彈跳 |
+| **≥ 100x** | **MEGA WIN** | 強烈標題脈衝 + 長時間金幣演出 |
+| **≥ 200x** | **SUPER WIN** | 頂級演出特效 |
 
 #### 遊戲流程
 
@@ -229,7 +236,7 @@ BigWin 觸發門檻：**totalMultiplier ≥ 20**（`BIG_WIN_THRESHOLD`）
        ├─ SlotMath.calculateWays()（計算 243 Ways 總倍率）
        ├─ SlotMath.checkScatterTrigger()（第 1、3、5 輪是否各有 SCATTER）
        ├─ 中獎格閃爍動畫
-       ├─ totalMultiplier ≥ 20 → showBigWin()
+       ├─ totalMultiplier ≥ 50 → showBigWin()
        ├─ SCATTER 觸發 → prepareEnterFreeGame()
        └─ Free Game 中 → handleFreeGameSpin()
 ```
@@ -272,11 +279,28 @@ BigWin 觸發門檻：**totalMultiplier ≥ 20**（`BIG_WIN_THRESHOLD`）
 
 ```typescript
 forceTriggerFreeGame()  // 強制觸發 FG（第 1、3、5 輪各一個 SCATTER），接著 8 局使用隨機 FG 矩陣
-forceBigWin()           // 全 5 輪塞滿 S4，確保 ≥ 20x（Big Win 門檻）
-forceMegaWin()          // 全 5 輪塞滿 S2，確保 ≥ 50x（Mega Win）
-forceSuperWin()         // 全 5 輪塞滿 S1，確保 ≥ 100x（Super Win）
+forceBigWin()           // 全 5 輪塞滿 S2，確保產出 60x（符合 Big Win 門檻）
+forceMegaWin()          // 全 5 輪塞滿 S1，確保產出 100x（符合 Mega Win）
+forceSuperWin()         // 全 5 輪塞滿 S1 並達成 2 Ways，確保產出 200x（符合 Super Win）
 forceFullWild()         // 全盤 WILD，觸發最大倍率
 ```
+
+### 展示亮點
+
+- **穩健的動畫回調安全 (Animation Callback Safety)**：
+    在 `SlotMagicDoorCtrl` 中實作了單次觸發守衛與逾時強制結束機制，防止因為動畫事件丟失（例如瀏覽器切換分頁）導致的遊戲死鎖。
+- **神秘擴展 (Mystery Expansion)**：
+    畫面上隨機出現神秘門，揭曉時會垂直擴展並轉化為相同的煉金符號。
+- **保底連線機制 (Guaranteed Win Mechanism)**：
+    若神秘門觸發後未能形成有效連線，系統將在起始列補入 **WILD** 符號，確保 1024-Ways 獎勵！這是一個將「數值機率」與「玩家心理平衡」結合的代碼實踐。
+- **HTML5 跨端 UI 整合**：
+    遊戲說明頁面採用響應式 HTML + WebView 整合，支持流暢的手勢滑動與分頁導航，降低遊戲包體並提高內容維護效率。
+- **音訊環境優化 (Web Audio Unlock)**：
+    實作了全域點擊解鎖 Web Audio Context 的技術，解決了 iOS Safari 上背景音樂無法自動播放或在切換場景後重啟的問題。
+- **iOS 風格自定義彈窗系統 (iOS-Style Modal System)**：
+    捨棄系統預設 `alert`，在 `SlotUICtrl` 中移植了原生感十足的動態模糊背景與彈窗動畫，提升遊戲整體的商業品牌感。
+- **開發效率繞過 (Engine Bug Workarounds)**：
+    針對 Cocos Creator 2.4.x 的 Click Event 與 Prefab 節點層級遮擋 Bug，採用純代碼層的 `TOUCH_END` 座標判定與動態綁定技術，確保 Auto Spin 選單 100% 反饋。
 
 ---
 

@@ -200,11 +200,11 @@ export default class SlotUICtrl extends cc.Component {
         // 依倍率選標題圖片
         const spriteComp = this.sprite_titleWin.getComponent(cc.Sprite);
         if (spriteComp) {
-            if (multiplier >= 100 && this.sprite_superWin) {
+            if (multiplier >= 200 && this.sprite_superWin) {
                 spriteComp.spriteFrame = this.sprite_superWin;
-            } else if (multiplier >= 50 && this.sprite_megaWin) {
+            } else if (multiplier >= 100 && this.sprite_megaWin) {
                 spriteComp.spriteFrame = this.sprite_megaWin;
-            } else if (multiplier >= 20 && this.sprite_bigWin) {
+            } else if (multiplier >= 50 && this.sprite_bigWin) {
                 spriteComp.spriteFrame = this.sprite_bigWin;
             } else if (this.sprite_bigWin) { // Fallback
                 spriteComp.spriteFrame = this.sprite_bigWin;
@@ -499,5 +499,62 @@ export default class SlotUICtrl extends cc.Component {
 
     hideInfo() {
         if (this.node_webViewInfo) this.node_webViewInfo.active = false;
+    }
+
+    /** 網頁端漂亮 iOS 提示窗 */
+    showIOSAlert(message: string) {
+        if (!cc.sys.isBrowser) {
+            cc.log("Alert: " + message);
+            return;
+        }
+
+        const overlay = document.createElement('div');
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0,0,0,0.4)';
+        overlay.style.display = 'flex';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.zIndex = '999999';
+        overlay.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+        const alertBox = document.createElement('div');
+        alertBox.style.backgroundColor = 'rgba(255,255,255,0.85)';
+        alertBox.style.backdropFilter = 'blur(20px)';
+        (alertBox.style as any).webkitBackdropFilter = 'blur(20px)';
+        alertBox.style.borderRadius = '14px';
+        alertBox.style.width = '270px';
+        alertBox.style.textAlign = 'center';
+        alertBox.style.display = 'flex';
+        alertBox.style.flexDirection = 'column';
+        alertBox.style.boxShadow = '0 4px 24px rgba(0,0,0,0.2)';
+
+        const content = document.createElement('div');
+        content.style.padding = '20px 16px';
+        content.style.fontSize = '13px';
+        content.style.color = '#000';
+        content.style.lineHeight = '1.4';
+        content.innerHTML = `<strong style="font-size: 17px; display: block; margin-bottom: 5px;">提示</strong>${message.replace(/\n/g, '<br>')}`;
+
+        const btn = document.createElement('div');
+        btn.innerText = '好';
+        btn.style.borderTop = '1px solid rgba(60,60,67,0.36)';
+        btn.style.color = '#007AFF';
+        btn.style.fontSize = '17px';
+        btn.style.fontWeight = '600';
+        btn.style.padding = '12px';
+        btn.style.cursor = 'pointer';
+
+        btn.onclick = () => {
+            document.body.removeChild(overlay);
+        };
+
+        alertBox.appendChild(content);
+        alertBox.appendChild(btn);
+        overlay.appendChild(alertBox);
+        document.body.appendChild(overlay);
     }
 }

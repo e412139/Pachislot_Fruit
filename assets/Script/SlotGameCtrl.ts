@@ -25,7 +25,7 @@ import CoinSpawner from "./CoinSpawner";
 const { ccclass, property } = cc._decorator;
 
 /** 倍率 ≥ 此數值時觸發 BigWin 演出 */
-const BIG_WIN_THRESHOLD = 20;
+const BIG_WIN_THRESHOLD = 50;
 
 @ccclass
 export default class SlotGameCtrl extends cc.Component {
@@ -656,30 +656,34 @@ export default class SlotGameCtrl extends cc.Component {
      * 共用觸發測試盤面函式
      */
     private triggerTestMatrix(matrix: SlotSymbolID[][]) {
-        if (this.phase !== SlotGamePhase.IDLE) {
-            cc.log("⚠️ 遊戲進行中，無法強制更改盤面！");
-            return;
-        }
-        if (this.autoSpinCount > 0 || this.isFreeGame) {
-            cc.log("⚠️ 請先停止自動旋轉或等 Free Game 結束再測試！");
-            return;
-        }
+        if (this.checkTestModeLocked()) return;
 
         this.riggedMatrixQueue = []; // 打斷連續測試序列
         this.riggedMatrix = matrix;
         this.onSpinClick();
     }
 
+    /** 檢查當前是否允許觸發測試指令 */
+    private checkTestModeLocked(): boolean {
+        if (this.isFreeGame) {
+            this.ui.showIOSAlert("免費遊戲期間禁止使用大獎測試功能！");
+            return true;
+        }
+        // -1 為無限旋轉， > 0 為剩餘旋轉次數
+        if (this.autoSpinCount !== 0) {
+            this.ui.showIOSAlert("請先點擊主畫面的 Spin 按鈕終止「自動旋轉」後，再進行大獎測試！");
+            return true;
+        }
+        if (this.phase !== SlotGamePhase.IDLE) {
+            this.ui.showIOSAlert("請等待當前旋轉結束並結算完成後，再進行測試！");
+            return true;
+        }
+        return false;
+    }
+
     /** 測試 Free Game：強制觸發，並依序控制接下來 8 局的空瓶數量 */
     forceTriggerFreeGame() {
-        if (this.phase !== SlotGamePhase.IDLE) {
-            cc.log("⚠️ 遊戲進行中，無法強制更改盤面！");
-            return;
-        }
-        if (this.autoSpinCount > 0 || this.isFreeGame) {
-            cc.log("⚠️ 請先停止自動旋轉或等 Free Game 結束再測試！");
-            return;
-        }
+        if (this.checkTestModeLocked()) return;
 
         const _ = SlotSymbolID.J; // 用低賠率圖填滿其他格，以免干擾
         const S = SlotSymbolID.SCATTER;
@@ -706,32 +710,22 @@ export default class SlotGameCtrl extends cc.Component {
         this.onSpinClick();
     }
 
-    /** 測試 Big Win (>=20x)：塞滿 5 輪 S4 確保 25x 中獎 */
+    /** 測試 Big Win (>=50x)：塞滿 5 輪 S2 確保 60x 中獎 */
     forceBigWin() {
-        const T = SlotSymbolID.S4;
-        this.triggerTestMatrix([
-            [T, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K],
-            [T, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K],
-            [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S1],
-            [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S1],
-            [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S2]
-        ]);
-    }
-
-    /** 測試 Mega Win (>=50x)：塞滿 5 輪 S2 確保 60x 中獎 */
-    forceMegaWin() {
+        if (this.checkTestModeLocked()) return;
         const T = SlotSymbolID.S2;
         this.triggerTestMatrix([
             [T, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K],
             [T, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K],
             [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S1],
             [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S1],
-            [T, SlotSymbolID.S1, SlotSymbolID.S5, SlotSymbolID.S3]
+            [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S3]
         ]);
     }
 
-    /** 測試超級大獎 (Super Win: >=100x)：塞滿 5 輪 S1 確保 100x 中獎 */
-    forceSuperWin() {
+    /** 測試 Mega Win (>=100x)：塞滿 5 輪 S1 確保 100x 中獎 */
+    forceMegaWin() {
+        if (this.checkTestModeLocked()) return;
         const T = SlotSymbolID.S1;
         this.triggerTestMatrix([
             [T, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K],
@@ -742,8 +736,22 @@ export default class SlotGameCtrl extends cc.Component {
         ]);
     }
 
+    /** 測試超級大獎 (Super Win: >=200x)：利用 S1 + Ways 確保 200x 中獎 */
+    forceSuperWin() {
+        if (this.checkTestModeLocked()) return;
+        const T = SlotSymbolID.S1;
+        this.triggerTestMatrix([
+            [T, T, SlotSymbolID.Q, SlotSymbolID.K], // 第一輪放兩個，達成 2 Ways
+            [T, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K],
+            [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S2],
+            [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S2],
+            [T, SlotSymbolID.S2, SlotSymbolID.S5, SlotSymbolID.S3]
+        ]);
+    }
+
     /** 測試全盤大獎 (Wild 全滿) */
     forceFullWild() {
+        if (this.checkTestModeLocked()) return;
         const W = SlotSymbolID.WILD;
         this.triggerTestMatrix([
             [W, W, W, W], [W, W, W, W], [W, W, W, W], [W, W, W, W], [W, W, W, W]
@@ -752,6 +760,7 @@ export default class SlotGameCtrl extends cc.Component {
 
     /** 測試魔法門擴展：強制 1, 4, 5 輪出現巨型魔法門，並保證中獎 */
     forceMagicDoor() {
+        if (this.checkTestModeLocked()) return;
         const M = SlotSymbolID.MAGIC_DOOR;
         const A = SlotSymbolID.A;
         const W = SlotSymbolID.WILD;
