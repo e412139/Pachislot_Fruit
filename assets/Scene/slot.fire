@@ -16132,7 +16132,7 @@
       "__id__": 367
     },
     "_children": [],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 369
@@ -16255,8 +16255,8 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -16.279,
-        605.046,
+        -13.659,
+        518.829,
         0,
         0,
         0,
@@ -16278,7 +16278,7 @@
     "_is3DNode": false,
     "_groupIndex": 0,
     "groupIndex": 0,
-    "_id": "80kyjG9pNAzJKxtG5aZQ6l"
+    "_id": "d8PdCojFJMK4KzV4LsNf6u"
   },
   {
     "__type__": "cc.ParticleSystem",
@@ -16294,60 +16294,58 @@
       }
     ],
     "_srcBlendFactor": 770,
-    "_dstBlendFactor": 1,
+    "_dstBlendFactor": 771,
     "_custom": true,
-    "_file": {
-      "__uuid__": "b2687ac4-099e-403c-a192-ff477686f4f5"
-    },
+    "_file": null,
     "_spriteFrame": {
-      "__uuid__": "472df5d3-35e7-4184-9e6c-7f41bee65ee3"
+      "__uuid__": "a71c0e7a-f1fe-452a-8954-4924864f2f90"
     },
     "_texture": null,
-    "_stopped": true,
-    "playOnLoad": false,
+    "_stopped": false,
+    "playOnLoad": true,
     "autoRemoveOnFinish": false,
     "totalParticles": 200,
     "duration": -1,
-    "emissionRate": 999.999985098839,
-    "life": 0.20000000298023224,
-    "lifeVar": 0.5,
+    "emissionRate": 20,
+    "life": 2,
+    "lifeVar": 1,
     "_startColor": {
       "__type__": "cc.Color",
-      "r": 202,
-      "g": 200,
-      "b": 86,
-      "a": 163
+      "r": 50,
+      "g": 255,
+      "b": 50,
+      "a": 78
     },
     "_startColorVar": {
       "__type__": "cc.Color",
-      "r": 229,
-      "g": 255,
-      "b": 173,
+      "r": 0,
+      "g": 0,
+      "b": 0,
       "a": 198
     },
     "_endColor": {
       "__type__": "cc.Color",
-      "r": 173,
-      "g": 161,
-      "b": 19,
-      "a": 214
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 0
     },
     "_endColorVar": {
       "__type__": "cc.Color",
-      "r": 107,
-      "g": 249,
-      "b": 249,
+      "r": 0,
+      "g": 0,
+      "b": 0,
       "a": 188
     },
-    "angle": 360,
-    "angleVar": 360,
-    "startSize": 3.369999885559082,
-    "startSizeVar": 50,
-    "endSize": 30.31999969482422,
-    "endSizeVar": 0,
-    "startSpin": -47.369998931884766,
+    "angle": 90,
+    "angleVar": 20,
+    "startSize": 40,
+    "startSizeVar": 10,
+    "endSize": 150,
+    "endSizeVar": 60,
+    "startSpin": 180,
     "startSpinVar": 0,
-    "endSpin": -47.369998931884766,
+    "endSpin": 360,
     "endSpinVar": -142.11000061035156,
     "sourcePos": {
       "__type__": "cc.Vec2",
@@ -16356,7 +16354,7 @@
     },
     "posVar": {
       "__type__": "cc.Vec2",
-      "x": 7,
+      "x": 60,
       "y": 7
     },
     "_positionType": 1,
@@ -16364,13 +16362,13 @@
     "emitterMode": 0,
     "gravity": {
       "__type__": "cc.Vec2",
-      "x": 0.25,
-      "y": 0.8600000143051147
+      "x": 0,
+      "y": 30
     },
-    "speed": 0,
-    "speedVar": 190.7899932861328,
-    "tangentialAccel": -92.11000061035156,
-    "tangentialAccelVar": 65.79000091552734,
+    "speed": 30,
+    "speedVar": 10,
+    "tangentialAccel": 0,
+    "tangentialAccelVar": 50,
     "radialAccel": -671.0499877929688,
     "radialAccelVar": 65.79000091552734,
     "rotationIsDir": false,
@@ -16381,7 +16379,7 @@
     "rotatePerS": 0,
     "rotatePerSVar": 0,
     "_N$preview": true,
-    "_id": "6779u5ByJAoIglU8euv0Fv"
+    "_id": "5cBPWjZH5H0qUdA+ltjLSu"
   },
   {
     "__type__": "36644+tKGtEtLlKIxbaqdEf",
@@ -16397,9 +16395,7 @@
     "smokeSprite": {
       "__id__": 368
     },
-    "bubbleParticle": {
-      "__id__": 371
-    },
+    "bubbleParticle": null,
     "_id": "10sBtmLR9MZaIKdcc+fxOl"
   },
   {

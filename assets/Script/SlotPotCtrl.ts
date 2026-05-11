@@ -1,13 +1,18 @@
 // SlotPotCtrl.ts
 // Alchemy Slot — 煉金鍋（Pot）裝飾動畫控制器
 // 掛載位置：node_Pot
-// Inspector 連結：potSprite (cc.Node), smokeSprite (cc.Node), bubbleParticle (cc.ParticleSystem)
+// Inspector 連結：
+//   potSprite          (cc.Node)
+//   smokeSprite        (cc.Node，初始 opacity=0)
+//   bubbleParticleNormal (cc.ParticleSystem，一般模式粒子，綠色)
+//   bubbleParticleFG     (cc.ParticleSystem，免費遊戲模式粒子，粉紫色)
 //
 // 節點建議結構：
 //   node_Pot
-//     ├── sprite_Pot       （鍋子主圖 Sprite）
-//     ├── sprite_smoke   （冒煙圖 Sprite，初始 opacity=0）
-//     └── particle_Bubble  （冒泡粒子 ParticleSystem，初始 stop）
+//     ├── sprite_Pot
+//     ├── sprite_smoke
+//     ├── particle_BubbleNormal
+//     └── particle_BubbleFG
 
 const { ccclass, property } = cc._decorator;
 
@@ -21,12 +26,26 @@ export default class SlotPotCtrl extends cc.Component {
     smokeSprite: cc.Node = null;
 
     @property(cc.ParticleSystem)
-    bubbleParticle: cc.ParticleSystem = null;
+    bubbleParticleNormal: cc.ParticleSystem = null; // 一般模式（綠色）
+
+    @property(cc.ParticleSystem)
+    bubbleParticleFG: cc.ParticleSystem = null;     // 免費遊戲（粉紫色）
 
     private idleBaseY: number = 0;
     private smokeBaseY: number = 0;
-    private smokeBaseScale: number = 1; 
-    private particleBaseScale: number = 1; // 儲存粒子節點的原始大小基準
+    private smokeBaseScale: number = 1;
+    private particleBaseScale: number = 1;
+    private _isFreeGame: boolean = false;
+
+    // 當前模式使用的粒子，讓各動畫方法不需要判斷模式
+    private get _activeBubble(): cc.ParticleSystem {
+        return this._isFreeGame ? this.bubbleParticleFG : this.bubbleParticleNormal;
+    }
+
+    // 當前模式不使用的粒子（需要被停掉）
+    private get _inactiveBubble(): cc.ParticleSystem {
+        return this._isFreeGame ? this.bubbleParticleNormal : this.bubbleParticleFG;
+    }
 
     // ─── 生命週期 ────────────────────────────────────────────
 
@@ -36,10 +55,10 @@ export default class SlotPotCtrl extends cc.Component {
         }
         if (this.smokeSprite) {
             this.smokeBaseY = this.smokeSprite.y;
-            this.smokeBaseScale = this.smokeSprite.scale; 
+            this.smokeBaseScale = this.smokeSprite.scale;
         }
-        if (this.bubbleParticle) {
-            this.particleBaseScale = this.bubbleParticle.node.scale;
+        if (this.bubbleParticleNormal) {
+            this.particleBaseScale = this.bubbleParticleNormal.node.scale;
         }
         this.stopAll();
     }
@@ -51,7 +70,23 @@ export default class SlotPotCtrl extends cc.Component {
     // ─── 公開介面 ────────────────────────────────────────────
 
     /**
-     * 待機動畫：上下浮動 ±5px + 呼吸縮放 0.97~1.03
+     * 切換粒子模式（進出 Free Game 時呼叫）
+     * @param isFreeGame true = 免費遊戲粒子（粉紫），false = 一般粒子（綠色）
+     */
+    setFreeGameMode(isFreeGame: boolean) {
+        this._isFreeGame = isFreeGame;
+        // node.active = false 讓殘留粒子立即消失，不等 lifetime 自然結束
+        const inactive = this._inactiveBubble;
+        if (inactive) {
+            cc.Tween.stopAllByTarget(inactive.node);
+            inactive.stopSystem();
+            inactive.node.scale = this.particleBaseScale;
+            inactive.node.active = false;
+        }
+    }
+
+    /**
+     * 待機動畫：呼吸縮放 0.97~1.03 + 粒子低頻呼吸
      * 無限循環，直到 stopAll() 呼叫
      */
     playIdle() {
@@ -62,16 +97,23 @@ export default class SlotPotCtrl extends cc.Component {
             cc.Tween.stopAllByTarget(this.smokeSprite);
             this.smokeSprite.opacity = 0;
         }
-        if (this.bubbleParticle) this.bubbleParticle.stopSystem();
 
-        // 讓亮光粒子在待機時也維持低頻率呼吸
-        if (this.bubbleParticle) {
-            cc.Tween.stopAllByTarget(this.bubbleParticle.node);
-            this.bubbleParticle.resetSystem(); // 保持粒子排放
-            // 降低排放量，讓它看起來比較柔和
-            this.bubbleParticle.emissionRate = 10; 
-            
-            cc.tween(this.bubbleParticle.node)
+        // 非使用中的粒子立即隱藏
+        const inactive = this._inactiveBubble;
+        if (inactive) {
+            cc.Tween.stopAllByTarget(inactive.node);
+            inactive.stopSystem();
+            inactive.node.active = false;
+        }
+
+        const bubble = this._activeBubble;
+        if (bubble) {
+            bubble.node.active = true;
+            cc.Tween.stopAllByTarget(bubble.node);
+            bubble.resetSystem();
+            bubble.emissionRate = 10;
+
+            cc.tween(bubble.node)
                 .repeatForever(
                     cc.tween()
                         .to(2.0, { scale: this.particleBaseScale * 1.1 }, { easing: 'sineInOut' })
@@ -90,36 +132,30 @@ export default class SlotPotCtrl extends cc.Component {
     }
 
     /**
-     * 旋轉動畫：鍋子左右搖晃 + 冒泡粒子加速
-     * 搖晃結束後自動回到 Idle
+     * 旋轉動畫：快速縮放跳動 + 粒子加速，結束後自動回 Idle
      */
     playSpin() {
         if (!this.potSprite) return;
         cc.Tween.stopAllByTarget(this.potSprite);
 
-        if (this.bubbleParticle) this.bubbleParticle.resetSystem();
+        const bubble = this._activeBubble;
+        if (bubble) {
+            bubble.node.active = true;
+            cc.Tween.stopAllByTarget(bubble.node);
+            bubble.resetSystem();
+            bubble.emissionRate = 50;
 
-        // 旋轉亮光強化
-        if (this.bubbleParticle) {
-            cc.Tween.stopAllByTarget(this.bubbleParticle.node);
-            this.bubbleParticle.resetSystem();
-            this.bubbleParticle.emissionRate = 50; // 提升排放量
-            
-            cc.tween(this.bubbleParticle.node)
+            cc.tween(bubble.node)
                 .to(0.5, { scale: this.particleBaseScale * 1.3 })
                 .start();
         }
 
-        // 改為快速縮放跳動，不要左右搖晃
         cc.tween(this.potSprite)
             .to(0.15, { scale: 1.2 })
             .to(0.15, { scale: 0.9 })
             .to(0.15, { scale: 1.1 })
             .to(0.15, { scale: 1.0 })
-            .call(() => {
-                // 恢復待機
-                this.playIdle();
-            })
+            .call(() => { this.playIdle(); })
             .start();
     }
 
@@ -132,34 +168,33 @@ export default class SlotPotCtrl extends cc.Component {
         cc.Tween.stopAllByTarget(this.potSprite);
         if (this.smokeSprite) cc.Tween.stopAllByTarget(this.smokeSprite);
 
+        const bubble = this._activeBubble;
+
         if (isBigWin) {
-            // ── BigWin：持續高亮冒煙 (純放大與淡入淡出) + 大幅彈跳 + bubble 持續噴發
             if (this.smokeSprite) {
-                cc.Tween.stopAllByTarget(this.smokeSprite);
                 this.smokeSprite.opacity = 0;
                 this.smokeSprite.y = this.smokeBaseY;
                 this.smokeSprite.scale = this.smokeBaseScale;
 
-                // 煙霧動態效果：透明度漸現、僅以你的 Inspector 設定為基準做微幅呼吸感
                 cc.tween(this.smokeSprite)
                     .repeatForever(
                         cc.tween()
                             .set({ opacity: 0, scale: this.smokeBaseScale })
                             .parallel(
                                 cc.tween().to(0.5, { opacity: 255 }).delay(1.0).to(1.0, { opacity: 0 }),
-                                // 在原始大小基礎上稍微變動即可
                                 cc.tween().to(2.5, { scale: this.smokeBaseScale * 1.1 })
                             )
                     )
                     .start();
             }
-            // 亮光爆發演出！
-            if (this.bubbleParticle) {
-                cc.Tween.stopAllByTarget(this.bubbleParticle.node);
-                this.bubbleParticle.resetSystem();
-                this.bubbleParticle.emissionRate = 120; // 大幅噴發
-                
-                cc.tween(this.bubbleParticle.node)
+
+            if (bubble) {
+                bubble.node.active = true;
+                cc.Tween.stopAllByTarget(bubble.node);
+                bubble.resetSystem();
+                bubble.emissionRate = 120;
+
+                cc.tween(bubble.node)
                     .to(0.2, { scale: this.particleBaseScale * 1.5 }, { easing: 'backOut' })
                     .delay(2.0)
                     .to(0.5, { scale: this.particleBaseScale })
@@ -170,12 +205,9 @@ export default class SlotPotCtrl extends cc.Component {
                 .to(0.25, { scale: 1.3 }, { easing: 'backOut' })
                 .to(0.35, { scale: 1.0 })
                 .start();
-            // BigWin 狀態持續到 stopAll() 被呼叫（下一局開始）
 
         } else {
-            // ── 小獎：原地快速冒煙飄散 + 小彈跳，結束後回 Idle
             if (this.smokeSprite) {
-                cc.Tween.stopAllByTarget(this.smokeSprite);
                 this.smokeSprite.opacity = 0;
                 this.smokeSprite.y = this.smokeBaseY;
                 this.smokeSprite.scale = this.smokeBaseScale;
@@ -187,10 +219,12 @@ export default class SlotPotCtrl extends cc.Component {
                     )
                     .start();
             }
-            if (this.bubbleParticle) {
-                this.bubbleParticle.resetSystem();
+
+            if (bubble) {
+                bubble.node.active = true;
+                bubble.resetSystem();
                 this.scheduleOnce(() => {
-                    if (this.bubbleParticle) this.bubbleParticle.stopSystem();
+                    if (bubble) bubble.stopSystem();
                 }, 0.8);
             }
 
@@ -216,8 +250,13 @@ export default class SlotPotCtrl extends cc.Component {
             cc.Tween.stopAllByTarget(this.smokeSprite);
             this.smokeSprite.opacity = 0;
         }
-        if (this.bubbleParticle) {
-            this.bubbleParticle.stopSystem();
+        if (this.bubbleParticleNormal) {
+            this.bubbleParticleNormal.stopSystem();
+            this.bubbleParticleNormal.node.active = false;
+        }
+        if (this.bubbleParticleFG) {
+            this.bubbleParticleFG.stopSystem();
+            this.bubbleParticleFG.node.active = false;
         }
     }
 
@@ -225,6 +264,7 @@ export default class SlotPotCtrl extends cc.Component {
         this.unscheduleAllCallbacks();
         if (this.potSprite) cc.Tween.stopAllByTarget(this.potSprite);
         if (this.smokeSprite) cc.Tween.stopAllByTarget(this.smokeSprite);
-        if (this.bubbleParticle) cc.Tween.stopAllByTarget(this.bubbleParticle.node);
+        if (this.bubbleParticleNormal) cc.Tween.stopAllByTarget(this.bubbleParticleNormal.node);
+        if (this.bubbleParticleFG) cc.Tween.stopAllByTarget(this.bubbleParticleFG.node);
     }
 }

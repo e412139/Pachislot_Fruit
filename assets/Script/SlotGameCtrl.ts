@@ -514,6 +514,7 @@ export default class SlotGameCtrl extends cc.Component {
 
     private enterFreeGame() {
         this.isFreeGame = true;
+        if (this.pot) this.pot.setFreeGameMode(true); // 粒子切換為 FG 粉紫色
         this.freeSpinsLeft = 8;
         this.freeGameTotalWin = 0;
         this.fgMultiplier = 2;
@@ -624,7 +625,8 @@ export default class SlotGameCtrl extends cc.Component {
     }
 
     private exitFreeGame() {
-        if (this.pot) this.pot.playIdle(); // 確保離開 FG 時停止任何劇烈的鍋子特效
+        // 轉場蓋住畫面前先隱藏 FG 粒子，不啟動一般粒子（避免轉場期間看到綠色泡泡）
+        if (this.pot) this.pot.setFreeGameMode(false);
 
         // 同樣趁魔法圈遮蔽時，無縫清空盤面殘留的贏分狀態
         this.scheduleOnce(() => {
@@ -633,6 +635,8 @@ export default class SlotGameCtrl extends cc.Component {
         }, 0.5);
 
         this.ui.playMagicTransition(false, () => {
+            // 轉場 reveal 完成後才啟動一般模式待機粒子
+            if (this.pot) this.pot.playIdle();
             this.isFreeGame = false;
             // 回復原本 AutoSpin
             this.autoSpinCount = this.savedAutoSpinCount;
