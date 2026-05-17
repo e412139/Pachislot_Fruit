@@ -13,9 +13,6 @@ export default class SlotSymbolCtrl extends cc.Component {
     @property(cc.Sprite)
     sprite: cc.Sprite = null;
 
-    @property(cc.Label)
-    label: cc.Label = null;
-
     /** 對應每個 SlotSymbolID 的 SpriteFrame（共 12 張，順序需與 enum 一致） */
     @property([cc.SpriteFrame])
     symbolFrames: cc.SpriteFrame[] = [];
@@ -29,10 +26,6 @@ export default class SlotSymbolCtrl extends cc.Component {
 
         if (this.sprite && this.symbolFrames.length > id && this.symbolFrames[id]) {
             this.sprite.spriteFrame = this.symbolFrames[id];
-        }
-
-        if (this.label) {
-            this.label.string = this.getSymbolName(id);
         }
     }
 

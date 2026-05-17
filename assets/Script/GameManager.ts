@@ -5,6 +5,7 @@ import UIController from "./UIController";
 import { GameState, SymbolType } from "./Enums";
 import CoinSpawner from "./CoinSpawner";
 import AudioService from "./AudioService";
+import CounterDisplay from "./CounterDisplay";
 
 const { ccclass, property } = cc._decorator;
 
@@ -35,6 +36,12 @@ export default class GameManager extends cc.Component {
   @property(CoinSpawner)
   coinSpawner: CoinSpawner = null;
 
+  @property(CounterDisplay)
+  counterDisplay: CounterDisplay = null;
+
+  @property(cc.Label)
+  label_count: cc.Label = null;  // 下方 COUNT 計數器
+
   @property(cc.Node)
   btn_spinNode: cc.Node = null; // 綁定那個圓圓的大 Spin 按鈕，用來掛載原生觸控(長按)事件
 
@@ -49,6 +56,7 @@ export default class GameManager extends cc.Component {
   private autoSpinCount: number = 0; // 剩餘自動旋轉次數，-1 表無限
 
   private bigWinAudioID: number = -1;
+  private spinCount: number = 0;  // COUNT 計數器（每轉 +3）
 
   state: GameState = GameState.IDLE;
 
@@ -67,6 +75,7 @@ export default class GameManager extends cc.Component {
   private riggedResult: SymbolType[][] = null; // 測試模式用的強制結果
 
   onLoad() {
+    cc.log('[GM] onLoad()');
     this.ui.updateScore(this.credit);
     this.endSpinSequence();
     this.ui.hideBigWinLayer(); // 初始時隱藏 BigWin
@@ -102,6 +111,12 @@ export default class GameManager extends cc.Component {
       this.audioService.stopAll();
     }
     this.unscheduleAllCallbacks();
+  }
+
+  private _updateCountLabel() {
+    if (this.label_count) {
+      this.label_count.string = this.spinCount.toString();
+    }
   }
 
   /** 停止大獎特效（金幣噴發 + 音效），GameManager 專屬的遊戲效果層 */
@@ -203,6 +218,21 @@ export default class GameManager extends cc.Component {
     cc.log("🎬 startSpin() called");
     this.state = GameState.SPINNING;
 
+    // 普通模式：SPIN COUNTER +1、COUNT +3（Free Game 期間不計入）
+    if (!this.isFreeGame) {
+      console.log("### GameManager calling counterDisplay.addNormalSpin()");
+      try {
+        if (this.counterDisplay) this.counterDisplay.addNormalSpin();
+        console.log("### GameManager calling counterDisplay.addNormalSpin()1");
+      } catch (e) {
+        cc.warn('[CounterDisplay] addNormalSpin error:', e);
+        console.log("### GameManager calling counterDisplay.addNormalSpin()2");
+      }
+      this.spinCount += 1;
+      console.log("### GameManager this.spinCount=", this.spinCount);
+      this._updateCountLabel();
+    }
+
     if (this.riggedResult) {
       this.spinResult = this.riggedResult;
       this.riggedResult = null; // 用完就清空
@@ -230,7 +260,7 @@ export default class GameManager extends cc.Component {
       cc.log(`📌 Stopping reel ${i} with target:`, this.spinResult[i]);
       r.stop(this.spinResult[i], () => {
         stoppedCount++;
-        
+
         // ---- 播放音效邏輯 ----
         // 由於三根轉輪幾乎同時發出停止命令、也會同時停下，為了不疊音只播放一次
         if (this.reelStopAudio && !hasPlayedSound) {
@@ -298,6 +328,10 @@ export default class GameManager extends cc.Component {
     const isScatterTriggered = scatterPositions.length >= 3;
 
     if (totalWinMultipliers > 0) {
+      // 中獎：COUNT 歸零
+      this.spinCount = 0;
+      this._updateCountLabel();
+
       let coinsWon = totalWinMultipliers * this.bet;
       this.credit += coinsWon;
       this.ui.playWin();
@@ -488,6 +522,19 @@ export default class GameManager extends cc.Component {
   // ==== Free Game 流程控制 (參照 Slot 機制) ====
 
   private prepareEnterFreeGame() {
+    // 台數表：BB 觸發，重置 SPIN COUNTER，BB回数 +1
+    try {
+      if (this.counterDisplay) this.counterDisplay.onBonusTriggered();
+    } catch (e) {
+      cc.warn('[CounterDisplay] onBonusTriggered error:', e);
+    }
+    // COUNT 歸零
+    this.spinCount = 0;
+    this._updateCountLabel();
+
+    // 進入 FG 轉場：隱藏台數表
+    if (this.counterDisplay) this.counterDisplay.node.active = false;
+
     this.ui.clearWinAmount();
     // 1. 播放 FG Trigger 音效
     if (this.audioService) this.audioService.playFGTrigger();
@@ -549,6 +596,8 @@ export default class GameManager extends cc.Component {
 
   private exitFreeGame() {
     cc.log("🔙 Exiting Free Game to Normal...");
+    // 退出 FG：顯示台數表
+    if (this.counterDisplay) this.counterDisplay.node.active = true;
     this.ui.swapBackground(false);
     if (this.audioService) this.audioService.playNormalBGM();
 

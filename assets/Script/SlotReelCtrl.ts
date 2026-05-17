@@ -117,7 +117,7 @@ export default class SlotReelCtrl extends cc.Component {
         } else if (firstDoorRow > 0) {
             startRowOffset = firstDoorRow;
         }
-        
+
         this.doorBaseY = startRowOffset * -100;
 
         // 目前轉輪正在滾，所以門從「doorBaseY - 幾格」的地方出發，跟著往上滾
@@ -163,7 +163,7 @@ export default class SlotReelCtrl extends cc.Component {
             const comp = node.getComponent(SlotSymbolCtrl);
             if (comp) return comp.getSymbol();
         }
-        return SlotSymbolID.S1;
+        return SlotSymbolID.S5;
     }
 
     forceUpdateAllSymbols(id: SlotSymbolID) {
@@ -205,6 +205,23 @@ export default class SlotReelCtrl extends cc.Component {
     }
 
     // ─── Update 主循環 ───────────────────────────────────────
+    // 滾動中
+    // ↓
+    // 顯示隨機圖案
+
+    // 開始停止
+    // ↓
+    // 依序塞 targetSymbols
+
+    // 遇到 MAGIC_DOOR
+    // ↓
+    // 隱藏原圖
+
+    // 全部塞完
+    // ↓
+    // 最後補一次隨機圖
+
+    // 停止完成
 
     update(dt: number) {
         if (!this.isSpinning) return;
