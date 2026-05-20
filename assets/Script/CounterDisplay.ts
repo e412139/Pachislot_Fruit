@@ -43,13 +43,24 @@ export default class CounterDisplay extends cc.Component {
         this._updateLabels();
     }
 
-    /** FG 觸發：記錄本次局數至長條圖，BB+1，SPIN COUNTER 歸零 */
-    onBonusTriggered() {
+    /** 777 觸發 BB：記錄至長條圖，BB 回数 +1，SPIN COUNTER 歸零 */
+    onBBTriggered() {
         this._shiftBars(this.spinCounter);
         this.bbCount++;
         this.spinCounter = 0;
         this._updateLabels();
     }
+
+    /** 77BAR 觸發 RB：記錄至長條圖，RB 回数 +1，SPIN COUNTER 歸零 */
+    onRBTriggered() {
+        this._shiftBars(this.spinCounter);
+        this.rbCount++;
+        this.spinCounter = 0;
+        this._updateLabels();
+    }
+
+    /** 向後相容別名 */
+    onBonusTriggered() { this.onBBTriggered(); }
 
     // ─── 私有：直接用名稱找節點，完全跳過 serialized reference ──
 

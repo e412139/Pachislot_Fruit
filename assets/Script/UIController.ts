@@ -64,6 +64,12 @@ export default class UIController extends cc.Component {
   node_fgCongratsLayout: cc.Node = null;
 
   @property(cc.Node)
+  node_fg_count: cc.Node = null; // FG 模式才顯示的局數計數框
+
+  @property(cc.Label)
+  label_fg_count: cc.Label = null; // node_fg_count 內的數字 Label
+
+  @property(cc.Node)
   node_neonSnake: cc.Node = null;
 
   @property(cc.Prefab)
@@ -106,7 +112,9 @@ export default class UIController extends cc.Component {
     // 2. 依據倍率替換圖片並彈跳出現
     let spriteComp = this.sprite_titleWin.getComponent(cc.Sprite);
     if (spriteComp) {
-      if (multiplier >= 50) {
+      // 方案 A：totalCoins 作為 multiplier 傳入
+      // 30枚以上=SuperWin, 20枚=MegaWin, 10枚=BigWin
+      if (multiplier >= 30) {
         spriteComp.spriteFrame = this.sprite_superWin;
       } else if (multiplier >= 20) {
         spriteComp.spriteFrame = this.sprite_megaWin;
@@ -244,13 +252,31 @@ export default class UIController extends cc.Component {
   /**
    * 展示進入 FG 的恭喜畫面
    */
-  showFGCongrats(duration: number, onComplete: () => void) {
+  showFGCongrats(duration: number, onComplete: () => void, spinCount: number = 8, mode: string = 'BB') {
     if (!this.node_fgCongratsLayout) {
       if (onComplete) onComplete();
       return;
     }
     this.node_fgCongratsLayout.active = true;
     this.node_fgCongratsLayout.opacity = 0;
+
+    // active 之後再更新局數，避免 CC2.x 重置 label
+    // 同時更新 label_num 節點本身及其子節點（處理 outline/shadow 複製）
+    const setAllLabels = (n: cc.Node, text: string) => {
+      const lbl = n.getComponent(cc.Label);
+      if (lbl) lbl.string = text;
+      n.children.forEach(child => {
+        const childLbl = child.getComponent(cc.Label);
+        if (childLbl) childLbl.string = text;
+      });
+    };
+
+    const numNode = this.node_fgCongratsLayout.getChildByName('label_num');
+    if (numNode) setAllLabels(numNode, spinCount.toString());
+
+    // 將 "FREE GAME" 改為傳入的模式名稱 (BB / RB)
+    const detailNode = this.node_fgCongratsLayout.getChildByName('label_datail');
+    if (detailNode) setAllLabels(detailNode, mode);
     cc.tween(this.node_fgCongratsLayout)
       .to(0.3, { opacity: 255 })
       .delay(duration - 0.6)
@@ -260,6 +286,25 @@ export default class UIController extends cc.Component {
         if (onComplete) onComplete();
       })
       .start();
+  }
+
+  /** 顯示 / 隱藏 FG 局數計數框（只在 FG 模式期間顯示） */
+  setFGCountVisible(visible: boolean) {
+    if (this.node_fg_count) this.node_fg_count.active = visible;
+  }
+
+  /**
+   * 更新 FG COUNT 顯示
+   * @param value  顯示數值（剩餘轉數 或 累積純增枚數）
+   * @param isRed  false=綠色(剩餘轉數)  true=紅色(累積純增)
+   */
+  setFGCount(value: number, isRed: boolean) {
+    if (!this.label_fg_count) return;
+    this.label_fg_count.string = value.toString();
+    // 規格書：黑色 = 剩餘轉數(Remaining)，紅色 = 累積純增(Net Payout)
+    this.label_fg_count.node.color = isRed
+      ? new cc.Color(255, 60, 60)
+      : new cc.Color(0, 0, 0);
   }
 
   /**
@@ -292,6 +337,7 @@ export default class UIController extends cc.Component {
     if (this.node_BigWinLayer) this.node_BigWinLayer.active = false;
     if (this.node_fgCongratsLayout) this.node_fgCongratsLayout.active = false;
     if (this.labelWinPoint) this.labelWinPoint.string = "";
+    if (this.node_fg_count) this.node_fg_count.active = false; // 預設隱藏，只在 FG 模式顯示
 
     // 1. 監聯 Web 平台的 postMessage (因為 Cocos 在預覽模式下是用 iframe 渲染 WebView)
     if (cc.sys.isBrowser) {
@@ -317,6 +363,22 @@ export default class UIController extends cc.Component {
 
   showInfo() {
     if (this.node_webViewInfo) {
+      const canvas = cc.Canvas.instance;
+      if (canvas) {
+        const cw = canvas.node.width;
+        const ch = canvas.node.height;
+
+        // 背景遮罩：填滿 Canvas 正中央
+        this.node_webViewInfo.setContentSize(cw, ch);
+        this.node_webViewInfo.setPosition(0, 0);
+
+        if (this.webView) {
+          // WebView 內容：上下各保留 8% 作為 Safe Area 邊距，不佔滿整個畫面
+          const marginY = Math.round(ch * 0.08);
+          this.webView.node.setContentSize(cw, ch - marginY * 2);
+          this.webView.node.setPosition(0, 0);
+        }
+      }
       this.node_webViewInfo.active = true;
     }
 

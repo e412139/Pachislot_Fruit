@@ -43,7 +43,7 @@ export default class Reel extends cc.Component {
 
       let symbolComp = node.getComponent(SymbolComp);
       if (symbolComp) {
-        let randomSymbol = Math.floor(Math.random() * 4);
+        let randomSymbol = Math.floor(Math.random() * 7);
         symbolComp.setSymbol(randomSymbol);
       }
 
@@ -127,7 +127,7 @@ export default class Reel extends cc.Component {
       if (symbolComp) {
         if (!this.isStopping) {
           // Normal spinning, just assign a random symbol
-          let rand = Math.floor(Math.random() * 4);
+          let rand = Math.floor(Math.random() * 7);
           symbolComp.setSymbol(rand);
         } else {
           // We are stopping, so we should spawn the target symbols in reverse (lowest first)
@@ -136,7 +136,7 @@ export default class Reel extends cc.Component {
             this.stoppingIndex--;
           } else if (this.stoppingIndex === -1) {
             // One more turnover to push t0, t1, t2 into visible slots!
-            let rand = Math.floor(Math.random() * 4);
+            let rand = Math.floor(Math.random() * 7);
             symbolComp.setSymbol(rand);
             this.stoppingIndex--; // turns to -2
           }

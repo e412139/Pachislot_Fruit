@@ -4,156 +4,209 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>水果 Slot 遊戲規則</title>
+  <title>柏青嫂遊戲說明</title>
   <style>
     :root {
-      --primary-gold: #ffd700;
-      --accent-cyan: #00ffcc;
-      --bg-dark: #120a1f;
-      --card-bg: rgba(255, 255, 255, 0.08);
-      --border-color: rgba(255, 215, 0, 0.3);
-      --font-main: 20px;
-      --font-title: 32px;
-      --font-sub: 24px;
+      --gold: #ffd700;
+      --cyan: #00ffcc;
+      --red: #ff5555;
+      --green: #55ff99;
+      --bg: #0e0820;
+      --card: rgba(255,255,255,0.07);
+      --border: rgba(255,215,0,0.25);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      overflow-x: hidden;
     }
 
     body {
       margin: 0;
       padding: 0;
-      background: linear-gradient(135deg, #1a0b2e 0%, #000000 100%);
+      background: linear-gradient(160deg, #1a0b2e 0%, #050510 100%);
       color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       user-select: none;
       -webkit-user-select: none;
       line-height: 1.5;
+      font-size: 17px;
     }
 
     .container {
-      padding: 30px 20px;
-      padding-top: 60px;
-      max-width: 600px;
-      margin: 0 auto;
+      padding: 70px 18px 40px;
+      width: 100%;
     }
 
     h1 {
       text-align: center;
-      color: var(--primary-gold);
-      text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
-      margin-bottom: 40px;
-      font-size: var(--font-title);
+      color: var(--gold);
+      font-size: 28px;
       letter-spacing: 3px;
+      margin-bottom: 32px;
+      text-shadow: 0 0 16px rgba(255,215,0,0.45);
     }
 
     .section-title {
-      color: #ffa500;
-      font-size: var(--font-sub);
-      margin: 30px 0 15px 0;
-      display: flex;
-      align-items: center;
-      border-left: 5px solid var(--primary-gold);
-      padding-left: 15px;
-    }
-
-    /* 單列卡片樣式 */
-    .pay-card {
-      background: var(--card-bg);
-      border-radius: 20px;
-      padding: 24px;
-      margin-bottom: 20px;
-      border: 1px solid var(--border-color);
-      display: flex;
-      align-items: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-
-    .sym-icon {
-      font-size: 64px;
-      /* 超大圖標 */
-      width: 100px;
-      height: 100px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 16px;
-      margin-right: 25px;
-      flex-shrink: 0;
-    }
-
-    .sym-info {
-      flex-grow: 1;
-    }
-
-    .sym-name {
-      font-size: 24px;
+      font-size: 20px;
       font-weight: bold;
-      color: #fff;
-      margin-bottom: 8px;
+      color: #ffa500;
+      border-left: 5px solid var(--gold);
+      padding-left: 12px;
+      margin: 28px 0 14px;
     }
 
-    .sym-desc {
-      font-size: 18px;
-      color: #aaa;
+    /* ── 賠率列 ── */
+    .pay-row {
+      display: flex;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
 
-    .sym-payout {
-      font-size: 32px;
+    .pay-row.bonus-bb { border-color: rgba(255,215,0,0.55); background: rgba(255,215,0,0.07); }
+    .pay-row.bonus-rb { border-color: rgba(255,100,100,0.5); background: rgba(255,100,100,0.07); }
+    .pay-row.special  { border-color: rgba(100,200,255,0.4); background: rgba(100,200,255,0.05); }
+
+    .sym {
+      font-size: 34px;
+      min-width: 80px;
+      text-align: center;
+      letter-spacing: -2px;
+    }
+
+    .info { flex-grow: 1; padding: 0 10px; }
+    .info .name { font-size: 17px; font-weight: bold; color: #fff; }
+    .info .desc { font-size: 14px; color: #aaa; margin-top: 3px; }
+
+    .payout {
+      font-size: 22px;
       font-weight: 800;
-      color: var(--accent-cyan);
+      color: var(--cyan);
       text-align: right;
-      text-shadow: 0 0 10px rgba(0, 255, 204, 0.4);
+      white-space: nowrap;
+      text-shadow: 0 0 8px rgba(0,255,204,0.35);
     }
 
-    /* 特殊符號樣式 */
-    .pay-card.special {
-      border: 1px solid #ff4d4d;
-      background: rgba(255, 77, 77, 0.1);
+    .payout.gold  { color: var(--gold);  text-shadow: 0 0 8px rgba(255,215,0,0.4); }
+    .payout.red   { color: var(--red);   text-shadow: 0 0 8px rgba(255,80,80,0.35); }
+    .payout.green { color: var(--green); text-shadow: 0 0 8px rgba(80,255,150,0.35); }
+    .payout.gray  { color: #888; }
+
+    /* ── 說明卡片 ── */
+    .info-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      font-size: 16px;
+      color: #ccc;
+      line-height: 1.85;
     }
 
-    .pay-card.special .sym-payout {
-      color: #ff6666;
+    .info-card strong { color: var(--gold); }
+    .info-card .tag {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-right: 4px;
     }
+    .tag.bb { background: rgba(255,215,0,0.2); color: var(--gold); }
+    .tag.rb { background: rgba(255,80,80,0.2); color: var(--red); }
+    .tag.fg { background: rgba(0,255,204,0.15); color: var(--cyan); }
 
-    /* 文字說明區 */
-    .rule-text-card {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 15px;
-      padding: 25px;
-      font-size: 19px;
-      color: #ddd;
-      line-height: 1.8;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+    /* ── COUNT 說明表 ── */
+    .count-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+      margin-top: 8px;
     }
-
-    .rule-text-card strong {
-      color: var(--primary-gold);
+    .count-table th {
+      background: rgba(255,215,0,0.15);
+      color: var(--gold);
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: bold;
     }
+    .count-table td {
+      padding: 8px 10px;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      color: #ccc;
+    }
+    .count-table .green-txt { color: var(--green); font-weight: bold; }
+    .count-table .red-txt   { color: var(--red);   font-weight: bold; }
 
+    /* ── 連線示意：5 個 3×3 小格 ── */
+    .lines-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .line-item {
+      flex: 1 1 calc(33% - 10px);
+      min-width: 80px;
+    }
+    .line-label {
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+    }
+    .mini-grid .c {
+      background: rgba(255,255,255,0.08);
+      border-radius: 5px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      color: transparent;
+    }
+    .mini-grid .c.on { background: rgba(255,215,0,0.3); color: var(--gold); }
+
+    /* ── 關閉按鈕 ── */
     .close-btn {
       position: fixed;
-      top: 20px;
-      right: 20px;
-      width: 50px;
-      height: 50px;
+      top: 16px;
+      right: 16px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255,255,255,0.12);
       color: #fff;
-      font-size: 28px;
+      font-size: 24px;
       display: flex;
       justify-content: center;
       align-items: center;
       text-decoration: none;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255,255,255,0.25);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       z-index: 100;
     }
+    .close-btn:active { background: rgba(255,255,255,0.35); transform: scale(0.9); }
 
-    .close-btn:active {
-      background: rgba(255, 255, 255, 0.4);
-      transform: scale(0.9);
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(255,215,0,0.3), transparent);
+      margin: 28px 0;
     }
   </style>
 </head>
@@ -162,67 +215,189 @@
   <a href="javascript:void(0)" onclick="closeCocos()" class="close-btn">✖</a>
 
   <div class="container">
-    <h1>水果 Slot 遊戲說明</h1>
+    <h1>🎰 柏青嫂遊戲說明</h1>
 
-    <div class="section-title">🏆 賠率表 (連線 3 顆)</div>
+    <!-- ══ 賠率表 ══ -->
+    <div class="section-title">🏆 賠率表（連線 3 顆）</div>
 
-    <!-- Apple -->
-    <div class="pay-card">
-      <div class="sym-icon">🍏</div>
-      <div class="sym-info">
-        <div class="sym-name">青蘋果</div>
-        <div class="sym-desc">Super Win 最高獎</div>
+    <div class="pay-row bonus-bb">
+      <div class="sym">7️⃣7️⃣7️⃣</div>
+      <div class="info">
+        <div class="name">三個 7（777）</div>
+        <div class="desc">觸發 Big Bonus (BB)・23 轉・共 360 枚</div>
       </div>
-      <div class="sym-payout">x 50</div>
+      <div class="payout gold">15 枚</div>
     </div>
 
-    <!-- Banana -->
-    <div class="pay-card">
-      <div class="sym-icon">🍌</div>
-      <div class="sym-info">
-        <div class="sym-name">香蕉</div>
-        <div class="sym-desc">Mega Win 大獎</div>
+    <div class="pay-row bonus-rb">
+      <div class="sym">7️⃣7️⃣<span style="font-size:24px;">BAR</span></div>
+      <div class="info">
+        <div class="name">77BAR</div>
+        <div class="desc">觸發 Regular Bonus (RB)・8 轉・共 135 枚</div>
       </div>
-      <div class="sym-payout">x 20</div>
+      <div class="payout red">15 枚</div>
     </div>
 
-    <!-- Cherry -->
-    <div class="pay-card">
-      <div class="sym-icon">🍒</div>
-      <div class="sym-info">
-        <div class="sym-name">櫻桃</div>
-        <div class="sym-desc">Big Win 鉅賞</div>
+    <div class="pay-row">
+      <div class="sym">🔔🔔🔔</div>
+      <div class="info">
+        <div class="name">銅鐘三連</div>
+        <div class="desc">高倍獎金</div>
       </div>
-      <div class="sym-payout">x 10</div>
+      <div class="payout">15 枚</div>
     </div>
 
-    <!-- Blueberry -->
-    <div class="pay-card">
-      <div class="sym-icon">🫐</div>
-      <div class="sym-info">
-        <div class="sym-name">藍莓</div>
-        <div class="sym-desc">一般獎金</div>
+    <div class="pay-row">
+      <div class="sym">🥥🥥🥥</div>
+      <div class="info">
+        <div class="name">椰子三連</div>
+        <div class="desc">一般獎金</div>
       </div>
-      <div class="sym-payout">x 5</div>
+      <div class="payout">10 枚</div>
     </div>
 
-    <!-- Scatter -->
-    <div class="pay-card special">
-      <div class="sym-icon">⭐</div>
-      <div class="sym-info">
-        <div class="sym-name">SCATTER</div>
-        <div class="sym-desc">分散免費獎 (FG 觸發)</div>
+    <div class="pay-row">
+      <div class="sym">🍉🍉🍉</div>
+      <div class="info">
+        <div class="name">西瓜三連</div>
+        <div class="desc">Bonus 中升為 15 枚</div>
       </div>
-      <div class="sym-payout">x 100</div>
+      <div class="payout">7 枚</div>
     </div>
 
-    <div class="section-title">🃏 特殊規則</div>
-
-    <div class="rule-text-card">
-      • <strong>WILD 🍉 百搭符號：</strong><br>可代替除了 SCATTER 以外的所有圖標。<br><br>
-      • <strong>免費遊戲 (Free Game)：</strong><br>畫面上出現 <strong>3 個 ⭐</strong> 即可觸發 <strong>8 局免費旋轉</strong>！<br><br>
-      • <strong>5 條有效連線：</strong><br>包含橫向三行與兩條大交叉。同一條線上湊滿 3 個符合圖案即中獎。
+    <div class="pay-row special">
+      <div class="sym">🍒</div>
+      <div class="info">
+        <div class="name">櫻桃</div>
+        <div class="desc">最左輪出現 1 顆即中，不需連線</div>
+      </div>
+      <div class="payout green">2 枚</div>
     </div>
+
+    <div class="pay-row">
+      <div class="sym">🔁🔁🔁</div>
+      <div class="info">
+        <div class="name">REPLAY 三連</div>
+        <div class="desc">下一局免費旋轉</div>
+      </div>
+      <div class="payout gray">0 枚</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ 遊戲模式 ══ -->
+    <div class="section-title">🎮 遊戲模式</div>
+
+    <div class="info-card">
+      <strong>一般模式</strong><br>
+      每轉花費 <strong>3 枚</strong>代幣。<br>
+      轉數計達 <strong>800 轉</strong>必定進入 Bonus Game。
+    </div>
+
+    <div class="info-card">
+      <span class="tag bb">BB</span><strong>Big Bonus（777 觸發）</strong><br>
+      • 共 <strong>23 轉</strong>，每轉花費 <strong>1 枚</strong><br>
+      • 每轉 100% 中獎，最高累積 <strong>360 枚</strong>
+    </div>
+
+    <div class="info-card">
+      <span class="tag rb">RB</span><strong>Regular Bonus（77BAR 觸發）</strong><br>
+      • 共 <strong>8 轉</strong>，每轉花費 <strong>1 枚</strong><br>
+      • 每轉 100% 中獎，最高累積 <strong>135 枚</strong><br>
+      • 吐幣達 135 枚即提前結算
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ COUNT 計數器 ══ -->
+    <div class="section-title">🔢 COUNT 計數器說明</div>
+
+    <div class="info-card">
+      Bonus 模式下，畫面右下角的 COUNT 方框會即時顯示進度：
+      <table class="count-table">
+        <tr>
+          <th>顏色</th>
+          <th>時機</th>
+          <th>顯示內容</th>
+        </tr>
+        <tr>
+          <td class="green-txt">■ 黑色</td>
+          <td>轉輪轉動中</td>
+          <td>剩餘轉數（8 → 7 → 6…）</td>
+        </tr>
+        <tr>
+          <td class="red-txt">■ 紅色</td>
+          <td>中獎結算後</td>
+          <td>本場累計純增枚數（14 → 28 → 42…）</td>
+        </tr>
+      </table>
+      <br>
+      純增 = 本轉贏得枚數 − 1 枚花費。例如每轉贏 15 枚，純增 <strong>+14 枚</strong>。
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ══ 連線說明 ══ -->
+    <div class="section-title">📐 5 條有效連線</div>
+
+    <div class="info-card">
+      包含 3 條橫線 + 2 條對角線（共 5 條），同一條線湊滿 3 個相同圖案即中獎。
+      <div class="lines-wrap">
+
+        <!-- 線 1：上橫 -->
+        <div class="line-item">
+          <div class="line-label">① 上橫</div>
+          <div class="mini-grid">
+            <div class="c on">★</div><div class="c on">★</div><div class="c on">★</div>
+            <div class="c"></div>   <div class="c"></div>   <div class="c"></div>
+            <div class="c"></div>   <div class="c"></div>   <div class="c"></div>
+          </div>
+        </div>
+
+        <!-- 線 2：中橫 -->
+        <div class="line-item">
+          <div class="line-label">② 中橫</div>
+          <div class="mini-grid">
+            <div class="c"></div>   <div class="c"></div>   <div class="c"></div>
+            <div class="c on">★</div><div class="c on">★</div><div class="c on">★</div>
+            <div class="c"></div>   <div class="c"></div>   <div class="c"></div>
+          </div>
+        </div>
+
+        <!-- 線 3：下橫 -->
+        <div class="line-item">
+          <div class="line-label">③ 下橫</div>
+          <div class="mini-grid">
+            <div class="c"></div>   <div class="c"></div>   <div class="c"></div>
+            <div class="c"></div>   <div class="c"></div>   <div class="c"></div>
+            <div class="c on">★</div><div class="c on">★</div><div class="c on">★</div>
+          </div>
+        </div>
+
+        <!-- 線 4：左上→右下 -->
+        <div class="line-item">
+          <div class="line-label">④ 斜 ＼</div>
+          <div class="mini-grid">
+            <div class="c on">★</div><div class="c"></div>   <div class="c"></div>
+            <div class="c"></div>   <div class="c on">★</div><div class="c"></div>
+            <div class="c"></div>   <div class="c"></div>   <div class="c on">★</div>
+          </div>
+        </div>
+
+        <!-- 線 5：左下→右上 -->
+        <div class="line-item">
+          <div class="line-label">⑤ 斜 ／</div>
+          <div class="mini-grid">
+            <div class="c"></div>   <div class="c"></div>   <div class="c on">★</div>
+            <div class="c"></div>   <div class="c on">★</div><div class="c"></div>
+            <div class="c on">★</div><div class="c"></div>   <div class="c"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="height: 20px;"></div>
   </div>
 
   <script>

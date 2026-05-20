@@ -1,6 +1,6 @@
 import Reel from "./Reel";
 import RNGService from "./RNGService";
-import PayoutService from "./PayoutService";
+import PayoutService, { PayResult } from "./PayoutService";
 import UIController from "./UIController";
 import { GameState, SymbolType } from "./Enums";
 import CoinSpawner from "./CoinSpawner";
@@ -58,18 +58,26 @@ export default class GameManager extends cc.Component {
   private bigWinAudioID: number = -1;
   private spinCount: number = 0;  // COUNT 計數器（每轉 +3）
 
+  // 天井系統：連續未中 BB/RB 的轉數，達上限自動觸發 BB
+  private readonly TENJOU_SPINS: number = 800;
+  private tenjouCount: number = 0;
+
   state: GameState = GameState.IDLE;
 
   rng = new RNGService();
   payout = new PayoutService();
 
   credit: number = 1000;
-  bet: number = 10;
+  bet: number = 30;
 
   private isFreeGame: boolean = false;
   private freeSpinsLeft: number = 0;
   private freeGameTotalWin: number = 0;
+  private fgNetTokens: number = 0;    // FG 內累積純增枚數（紅色 COUNT 用）
+  private fgGrossTokens: number = 0;  // FG 內累積吐幣（Gross Pay），RB 上限 120 枚
   private savedAutoSpinCount: number = 0;
+  private fgMode: 'BB' | 'RB' = 'BB';  // BB=777(23轉) RB=77BAR(8轉)
+  private isReplayPending: boolean = false;  // REPLAY 免費下一轉
 
   spinResult = null;
   private riggedResult: SymbolType[][] = null; // 測試模式用的強制結果
@@ -205,10 +213,16 @@ export default class GameManager extends cc.Component {
       cc.audioEngine.playEffect(this.betButtonAudio, false);
     }
 
-    if (!this.isFreeGame) {
+    if (this.isFreeGame) {
+      // FG 模式每轉花費 1 枚（= bet / 3），而非免費
+      this.credit -= Math.floor(this.bet / 3);
+      this.ui.updateScore(this.credit);
+    } else if (!this.isReplayPending) {
+      // 一般模式每轉花費 3 枚（= bet）
       this.credit -= this.bet;
       this.ui.updateScore(this.credit);
     }
+    this.isReplayPending = false;
 
     this.startSpinSequence();
     this.startSpin();
@@ -218,19 +232,48 @@ export default class GameManager extends cc.Component {
     cc.log("🎬 startSpin() called");
     this.state = GameState.SPINNING;
 
-    // 普通模式：SPIN COUNTER +1、COUNT +3（Free Game 期間不計入）
+    // 普通模式：SPIN COUNTER +1（Free Game 期間不計入）
     if (!this.isFreeGame) {
-      console.log("### GameManager calling counterDisplay.addNormalSpin()");
       try {
         if (this.counterDisplay) this.counterDisplay.addNormalSpin();
-        console.log("### GameManager calling counterDisplay.addNormalSpin()1");
       } catch (e) {
         cc.warn('[CounterDisplay] addNormalSpin error:', e);
-        console.log("### GameManager calling counterDisplay.addNormalSpin()2");
       }
       this.spinCount += 1;
-      console.log("### GameManager this.spinCount=", this.spinCount);
+      this.tenjouCount += 1;
+      cc.log(`[天井] tenjouCount=${this.tenjouCount}/${this.TENJOU_SPINS}`);
       this._updateCountLabel();
+
+      // 天井達標：強制下一轉 777 → BB
+      if (this.tenjouCount >= this.TENJOU_SPINS && !this.riggedResult) {
+        const S = SymbolType.SEVEN;
+        const X = SymbolType.WATERMELON;
+        this.riggedResult = [
+          [X, S, X],
+          [X, S, X],
+          [X, S, X]
+        ];
+        cc.log(`🌙 天井！${this.TENJOU_SPINS} 轉未中 BB/RB，本轉強制觸發 777 → BB`);
+      }
+    }
+
+    // FG 模式：每轉 100% 中獎 → 強制中線 BELL×3 = 15 枚
+    if (this.isFreeGame && !this.riggedResult) {
+      // 墊位用不同 symbol 錯開，避免上/下排或對角線形成意外連線
+      // reel[i] = [top, mid, bot]
+      const B = SymbolType.BELL;
+      const C = SymbolType.COCONUT;
+      const W = SymbolType.WATERMELON;
+      this.riggedResult = [
+        [C, B, W], // reel 0: top=COCONUT,     mid=BELL, bot=WATERMELON
+        [W, B, C], // reel 1: top=WATERMELON,  mid=BELL, bot=COCONUT
+        [C, B, W], // reel 2: top=COCONUT,     mid=BELL, bot=WATERMELON
+      ];
+    }
+
+    // FG 模式：滾輪開始轉動時，COUNT 切換為黑色顯示剩餘轉數
+    if (this.isFreeGame) {
+      this.ui.setFGCount(this.freeSpinsLeft, false);
     }
 
     if (this.riggedResult) {
@@ -279,120 +322,151 @@ export default class GameManager extends cc.Component {
   onResult() {
     this.state = GameState.RESULT;
 
-    let lines = [
-      // 橫向 3 條 (Top, Mid, Bot)
+    const lines = [
       [this.spinResult[0][0], this.spinResult[1][0], this.spinResult[2][0]],
       [this.spinResult[0][1], this.spinResult[1][1], this.spinResult[2][1]],
       [this.spinResult[0][2], this.spinResult[1][2], this.spinResult[2][2]],
-      // 交叉 2 條 (\, /)
       [this.spinResult[0][0], this.spinResult[1][1], this.spinResult[2][2]],
       [this.spinResult[0][2], this.spinResult[1][1], this.spinResult[2][0]]
     ];
-
-    let linePositions = [
-      [[0, 0], [1, 0], [2, 0]], // 橫向 Top
-      [[0, 1], [1, 1], [2, 1]], // 橫向 Mid
-      [[0, 2], [1, 2], [2, 2]], // 橫向 Bot
-      [[0, 0], [1, 1], [2, 2]], // 交叉 \
-      [[0, 2], [1, 1], [2, 0]]  // 交叉 /
+    const linePositions = [
+      [[0, 0], [1, 0], [2, 0]],
+      [[0, 1], [1, 1], [2, 1]],
+      [[0, 2], [1, 2], [2, 2]],
+      [[0, 0], [1, 1], [2, 2]],
+      [[0, 2], [1, 1], [2, 0]]
     ];
 
-    let totalWinMultipliers = 0;
+    let totalCoins = 0;
+    let triggerBB = false;
+    let triggerRB = false;
+    let isReplay = false;
+
+    // ── 連線判斷（兩階段）──────────────────────────────────
+    // Phase 1：計算所有線的結果，累積分數與旗標
+    const lineResults: { res: PayResult; positions: number[][] }[] = [];
     for (let i = 0; i < lines.length; i++) {
-      let win = this.payout.evaluate(lines[i]);
-      if (win > 0) {
-        cc.log(`🎉 Line ${i} won ${win}x! Line:`, lines[i]);
-        totalWinMultipliers += win;
+      const res: PayResult = this.payout.evaluate(lines[i], this.isFreeGame);
+      lineResults.push({ res, positions: linePositions[i] });
+      totalCoins += res.coins;
+      if (res.triggerBB) triggerBB = true;
+      if (res.triggerRB) triggerRB = true;
+      if (res.isReplay)  isReplay  = true;
+    }
 
-        // 觸發中獎的圖標閃爍
-        let positions = linePositions[i];
-        for (let pos of positions) {
-          let col = pos[0];
-          let row = pos[1];
-          this.reels[col].playWinAnimation(row);
+    // Phase 2：依優先級決定動畫
+    // 優先級（互斥）：BB/RB trigger > 有枚數 > REPLAY（再一次）
+    // FG 模式下 REPLAY 是墊位，不屬於任何優先級
+    const hasBBRBWin = triggerBB || triggerRB;
+    const hasCoinWin = totalCoins > 0;
+
+    for (const { res, positions } of lineResults) {
+      let shouldAnimate = false;
+
+      if (hasBBRBWin) {
+        // 最高優先：只閃 BB/RB 觸發線
+        shouldAnimate = res.triggerBB || res.triggerRB;
+      } else if (hasCoinWin) {
+        // 次優先：只閃有枚數的線
+        shouldAnimate = res.coins > 0;
+      } else {
+        // 最低優先：只閃 REPLAY（普通模式才閃，FG 是墊位不閃）
+        shouldAnimate = res.isReplay && !this.isFreeGame;
+      }
+
+      if (shouldAnimate) {
+        for (const pos of positions) {
+          this.reels[pos[0]].playWinAnimation(pos[1]);
         }
       }
     }
 
-    // ---- Scatter 檢查 ----
-    let scatterPositions: { col: number; row: number }[] = [];
-    for (let c = 0; c < this.spinResult.length; c++) {
-      for (let r = 0; r < this.spinResult[c].length; r++) {
-        if (this.spinResult[c][r] === SymbolType.SCATTER) {
-          scatterPositions.push({ col: c, row: r });
-        }
-      }
+    // ── 櫻桃：最左輪出現即中，2枚，不需連線 ──────────────
+    const cherryOnLeft = this.spinResult[0].some(s => s === SymbolType.CHERRY);
+    if (cherryOnLeft) {
+      totalCoins += 2;
+      this.spinResult[0].forEach((s, r) => {
+        if (s === SymbolType.CHERRY) this.reels[0].playWinAnimation(r);
+      });
     }
 
-    // 只要盤面上出現 3 個或更多 Scatter (1,3,5輪分佈或是任意)
-    const isScatterTriggered = scatterPositions.length >= 3;
+    // ── 計算金額（枚數 × bet / 3）─────────────────────────
+    const coinsWon = totalCoins > 0 ? Math.floor(totalCoins * this.bet / 3) : 0;
+    const effectiveMulti = totalCoins / 3;
+    const isBBRBTrigger = (triggerBB || triggerRB) && !this.isFreeGame;
 
-    if (totalWinMultipliers > 0) {
-      // 中獎：COUNT 歸零
+    if (coinsWon > 0) {
       this.spinCount = 0;
       this._updateCountLabel();
-
-      let coinsWon = totalWinMultipliers * this.bet;
       this.credit += coinsWon;
       this.ui.playWin();
+      // 延遲 0.5 秒後再顯示贏分，讓玩家先看清楚中獎 symbol
+      this.scheduleOnce(() => { this.ui.showWinAmount(coinsWon); }, 0.5);
+      if (this.isFreeGame) this.freeGameTotalWin += coinsWon;
 
-      this.ui.showWinAmount(coinsWon); // 顯示贏分數值 (含千分位)
-
-      if (this.isFreeGame) {
-        this.freeGameTotalWin += coinsWon;
+      // BigWin 演出：FG 模式每轉固定中獎不算大獎，留到 FG 結算時一次播放
+      // 門檻：10枚=BigWin, 20枚=MegaWin, 30枚=SuperWin
+      if (totalCoins >= 10 && !isBBRBTrigger && !this.isFreeGame) {
+        this.showBigWin(coinsWon, totalCoins);
+      } else if (this.fireAudio) {
+        cc.audioEngine.playEffect(this.fireAudio, false);
       }
-
-      // 如果是要進入 FG，不要在這邊跳 BigWin 彈窗，留到最後 FG 結算
-      if (totalWinMultipliers >= 10 && !isScatterTriggered && !this.isFreeGame) {
-        // 觸發大獎彈窗跑分與音效等動畫
-        this.showBigWin(coinsWon, totalWinMultipliers);
-      } else {
-        // 一般小獎，只播放普通的贏分音效（單次）
-        if (this.fireAudio) {
-          cc.audioEngine.playEffect(this.fireAudio, false);
-        }
-      }
-
-      cc.log(`🎉 Total Win! You won ${coinsWon} credits (${totalWinMultipliers}x)`);
+      cc.log(`🎉 coinsWon=${coinsWon} (${totalCoins}枚)`);
     }
 
     this.ui.updateScore(this.credit);
 
-    // 處理 Scatter 動畫
-    if (isScatterTriggered) {
-      scatterPositions.forEach(pos => {
-        this.reels[pos.col].playScatterAnimation(pos.row);
-      });
-    }
-
-    // ---- 判斷是否進入 Free Game ----
-    if (isScatterTriggered && !this.isFreeGame) {
-      cc.log("⭐ 3 Scatter detected! Entering Free Game...");
-      this.scheduleOnce(() => {
-        this.prepareEnterFreeGame();
-      }, 1.5);
+    // ── 777 → BB 模式 ────────────────────────────────────
+    if (triggerBB && !this.isFreeGame) {
+      cc.log("7️⃣7️⃣7️⃣ 777! 進入 BB 模式");
+      this.scheduleOnce(() => this.prepareEnterFreeGame('BB'), coinsWon > 0 ? 1.5 : 0.5);
       return;
     }
 
-    // ---- Free Game 局數管理 ----
+    // ── 77BAR → RB 模式 ─────────────────────────────────
+    if (triggerRB && !this.isFreeGame) {
+      cc.log("7️⃣7️⃣BAR 77BAR! 進入 RB 模式");
+      this.scheduleOnce(() => this.prepareEnterFreeGame('RB'), coinsWon > 0 ? 1.5 : 0.5);
+      return;
+    }
+
+    // ── REPLAY → 下局免費（有枚數時不執行，枚數優先）──────
+    if (isReplay && !this.isFreeGame && totalCoins === 0) {
+      cc.log("🔄 REPLAY! 下局免費");
+      this.isReplayPending = true;
+      this.state = GameState.IDLE;
+      this.scheduleOnce(() => { if (this.state === GameState.IDLE) this.onSpinClick(); }, 1.2);
+      return;
+    }
+
+    // ── Free Game 局數管理 ────────────────────────────────
     if (this.isFreeGame) {
       this.freeSpinsLeft--;
       this.ui.updateSpinButton(this.freeSpinsLeft);
 
-      let delay = 1.0;
-      if (totalWinMultipliers > 0) {
-        delay = totalWinMultipliers >= 10 ? 2.5 : 1.5;
+      // 中獎後：累積 gross/net 並更新 COUNT 紅色顯示
+      if (coinsWon > 0) {
+        this.fgGrossTokens += totalCoins;              // gross 吐幣（含花費前）
+        this.fgNetTokens += totalCoins - 1;            // net 純增（扣 1 枚成本）
+        this.ui.setFGCount(this.fgNetTokens, true);
+
+        // 吐幣上限檢查（滿足任一條件即強制結算）
+        // RB：FG 期間 >= 120 枚（= 135 - trigger 15）
+        // BB：FG 期間 >= 345 枚（= 360 - trigger 15）
+        const FG_CAP = this.fgMode === 'RB' ? 120 : 345;
+        if (this.fgGrossTokens >= FG_CAP) {
+          cc.log(`🎰 ${this.fgMode} 吐幣上限達成（${this.fgGrossTokens} 枚 >= ${FG_CAP}），提前結算`);
+          this.freeSpinsLeft = 0;
+        }
       }
 
+      // FG 每轉固定 1.2 秒後進下一轉（讓中獎音效與贏分顯示可被看到）
+      // 最後一轉再多等 1.0 秒才進結算
+      const delay = 1.2;
       if (this.freeSpinsLeft > 0) {
-        this.scheduleOnce(() => {
-          this.state = GameState.IDLE;
-          this.onSpinClick();
-        }, delay);
+        this.scheduleOnce(() => { this.state = GameState.IDLE; this.onSpinClick(); }, delay);
       } else {
-        this.scheduleOnce(() => {
-          this.processFreeGameEnd();
-        }, delay + 1.0);
+        this.scheduleOnce(() => this.processFreeGameEnd(), delay + 1.0);
       }
       return;
     }
@@ -408,14 +482,10 @@ export default class GameManager extends cc.Component {
       }
       cc.log(`🔄 Auto Spin 準備進行下一把，剩餘次數: ${this.autoSpinCount === -1 ? '無限' : this.autoSpinCount}`);
 
-      let nextSpinDelay = 1.0; // 預設沒中獎的下一局等待時間
+      let nextSpinDelay = 1.0;
 
-      if (totalWinMultipliers > 0) {
-        if (totalWinMultipliers >= 10) {
-          nextSpinDelay = 3.0; // 大獎演出較久 (跑分2秒 + 停留0.5秒 + 關閉)，抓 3 秒接下一局
-        } else {
-          nextSpinDelay = 1.6; // 小獎稍微多停一會讓玩家看字
-        }
+      if (coinsWon > 0) {
+        nextSpinDelay = totalCoins >= 10 ? 3.0 : 1.6;
       }
 
       // 依據是否中獎停滯不同秒數後再接下一把
@@ -489,47 +559,80 @@ export default class GameManager extends cc.Component {
 
 
   // ================= 測試模式專用按鈕綁定區 =================
+  // 場景按鈕綁定：BB→forceWinA, RB→forceWinB, 🔔→forceWinC, 🥥→forceWinD, 🍉→forceFreeGame
 
-  forceWinA() { this.triggerTestWin(SymbolType.A); }
-  forceWinB() { this.triggerTestWin(SymbolType.B); }
-  forceWinC() { this.triggerTestWin(SymbolType.C); }
-  forceWinD() { this.triggerTestWin(SymbolType.D); }
-
-  private triggerTestWin(symbol: SymbolType) {
-    // 檢查1：目前正處於自動轉輪循環中 (無論是無限轉還是有剩餘次數)
-    if (this.autoSpinCount !== 0) {
-      this.ui.showIOSAlert("請先點擊主畫面的 Spin 按鈕終止「自動旋轉」後，再進行大獎測試！");
-      return;
-    }
-
-    // 檢查2：目前是單次旋轉，但轉輪或是中獎動畫還在進行中
-    if (this.state !== GameState.IDLE) {
-      this.ui.showIOSAlert("轉輪或動畫正在進行中！\n請等這局完全結束後，再進行大獎測試！");
-      return;
-    }
-
-    // 構建一個必定在中線連成一線的結果陣列
-    // 3輪，每輪傳入 [上, 中, 下]，我們讓中間全部都是我們指定的 symbol
+  /** 測試 BB 模式：777 中線三連，觸發 BB（23轉）+ 15枚中獎 */
+  forceWinA() {
+    if (!this._checkTestReady()) return;
+    const S = SymbolType.SEVEN;
+    const X = SymbolType.WATERMELON;
     this.riggedResult = [
-      [SymbolType.C, symbol, SymbolType.B], // 第1輪
-      [SymbolType.A, symbol, SymbolType.C], // 第2輪
-      [SymbolType.D, symbol, SymbolType.A]  // 第3輪
+      [X, S, X],
+      [X, S, X],
+      [X, S, X]
     ];
+    this.onSpinClick();
+  }
 
-    this.onSpinClick(); // 直接模擬按下旋轉來啟動
+  /** 測試 RB 模式：77BAR 中線，觸發 RB（8轉）+ 15枚中獎 */
+  forceWinB() {
+    if (!this._checkTestReady()) return;
+    const X = SymbolType.WATERMELON;
+    this.riggedResult = [
+      [X, SymbolType.SEVEN, X],
+      [X, SymbolType.SEVEN, X],
+      [X, SymbolType.BAR, X]
+    ];
+    this.onSpinClick();
+  }
+
+  /** 測試 🔔 銅鐘三連：15枚 × (bet/3) */
+  forceWinC() { this._triggerLineWin(SymbolType.BELL); }
+
+  /** 測試 🥥 椰子三連：10枚 × (bet/3) */
+  forceWinD() { this._triggerLineWin(SymbolType.COCONUT); }
+
+  private _checkTestReady(): boolean {
+    if (this.autoSpinCount !== 0) {
+      this.ui.showIOSAlert("請先停止「自動旋轉」後再進行測試！");
+      return false;
+    }
+    if (this.state !== GameState.IDLE) {
+      this.ui.showIOSAlert("請等當前旋轉結束後再進行測試！");
+      return false;
+    }
+    return true;
+  }
+
+  private _triggerLineWin(symbol: SymbolType) {
+    if (!this._checkTestReady()) return;
+    const X = SymbolType.REPLAY;
+    this.riggedResult = [
+      [X, symbol, X],
+      [X, symbol, X],
+      [X, symbol, X]
+    ];
+    this.onSpinClick();
   }
 
   // ==== Free Game 流程控制 (參照 Slot 機制) ====
 
-  private prepareEnterFreeGame() {
-    // 台數表：BB 觸發，重置 SPIN COUNTER，BB回数 +1
+  private prepareEnterFreeGame(mode: 'BB' | 'RB' = 'BB') {
+    this.fgMode = mode;
+
+    // 台數表：記錄 BB 或 RB，SPIN COUNTER 歸零
     try {
-      if (this.counterDisplay) this.counterDisplay.onBonusTriggered();
+      if (this.counterDisplay) {
+        mode === 'BB'
+          ? (this.counterDisplay as any).onBBTriggered()
+          : (this.counterDisplay as any).onRBTriggered();
+      }
     } catch (e) {
-      cc.warn('[CounterDisplay] onBonusTriggered error:', e);
+      cc.warn('[CounterDisplay] trigger error:', e);
     }
-    // COUNT 歸零
+
     this.spinCount = 0;
+    this.tenjouCount = 0; // 進入 BB/RB，天井計數歸零
     this._updateCountLabel();
 
     // 進入 FG 轉場：隱藏台數表
@@ -539,10 +642,11 @@ export default class GameManager extends cc.Component {
     // 1. 播放 FG Trigger 音效
     if (this.audioService) this.audioService.playFGTrigger();
 
-    // 2. 顯示過渡頁面
+    // 2. 顯示過渡頁面（BB=23轉, RB=8轉）
+    const spinCount = this.fgMode === 'BB' ? 23 : 8;
     this.ui.showFGCongrats(1.5, () => {
       this.enterFreeGame();
-    });
+    }, spinCount, this.fgMode);
 
     // 3. 在過渡期間悄悄換背景與 BGM
     this.scheduleOnce(() => {
@@ -553,8 +657,13 @@ export default class GameManager extends cc.Component {
 
   private enterFreeGame() {
     this.isFreeGame = true;
-    this.freeSpinsLeft = 8;
+    // 轉場結束，顯示台數表
+    if (this.counterDisplay) this.counterDisplay.node.active = true;
+    // BB = 23 轉，RB = 8 轉
+    this.freeSpinsLeft = this.fgMode === 'BB' ? 23 : 8;
     this.freeGameTotalWin = 0;
+    this.fgNetTokens = 0;   // 重置 FG 純增枚數累計
+    this.fgGrossTokens = 0; // 重置 FG 吐幣累計
 
     this.savedAutoSpinCount = this.autoSpinCount;
     this.autoSpinCount = 0;
@@ -563,6 +672,8 @@ export default class GameManager extends cc.Component {
 
     // 啟動霓虹蛇特效
     this.ui.setNeonEffect(true);
+    // 顯示 FG 局數計數框
+    this.ui.setFGCountVisible(true);
 
     cc.log("✅ FG Started! Moving to IDLE for auto spin.");
     this.state = GameState.IDLE;
@@ -601,8 +712,9 @@ export default class GameManager extends cc.Component {
     this.ui.swapBackground(false);
     if (this.audioService) this.audioService.playNormalBGM();
 
-    // 關閉霓虹蛇特效
+    // 關閉霓虹蛇特效與 FG 計數框
     this.ui.setNeonEffect(false);
+    this.ui.setFGCountVisible(false);
 
     this.isFreeGame = false;
     this.autoSpinCount = this.savedAutoSpinCount;
@@ -633,16 +745,7 @@ export default class GameManager extends cc.Component {
       return;
     }
 
-    const S = SymbolType.SCATTER;
-    const A = SymbolType.A;
-    // 構建一個中線全是 Scatter 的盤面 (Reel 0,1,2 中間都是 S)
-    this.riggedResult = [
-      [A, S, A], // 第1輪 (Top, Mid, Bot)
-      [A, S, A], // 第2輪
-      [A, S, A]  // 第3輪
-    ];
-
-    cc.log("🚀 [Test] 強制觸發 3 Scatter 中獎流程");
-    this.onSpinClick();
+    // 🍉 西瓜三連：7枚 × (bet/3)
+    this._triggerLineWin(SymbolType.WATERMELON);
   }
 }

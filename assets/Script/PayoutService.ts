@@ -1,26 +1,51 @@
 import { SymbolType } from "./Enums";
 
+export interface PayResult {
+  coins: number;     // 中獎枚數（coinsWon = coins × bet / 3）
+  triggerBB: boolean;  // 777 → BB 模式
+  triggerRB: boolean;  // 77BAR → RB 模式
+  isReplay: boolean;   // REPLAY × 3 → 下局免費
+}
+
 export default class PayoutService {
 
-  evaluate(line: SymbolType[]): number {
+  evaluate(line: SymbolType[], isFreeGame: boolean = false): PayResult {
+    const none: PayResult = { coins: 0, triggerBB: false, triggerRB: false, isReplay: false };
 
-    // 處理 WILD
-    let base = line.find(s => s !== SymbolType.WILD);
+    // 777 → BB 模式，15枚
+    if (this.all(line, SymbolType.SEVEN)) {
+      return { coins: 15, triggerBB: true, triggerRB: false, isReplay: false };
+    }
 
-    let normalized = line.map(s => s === SymbolType.WILD ? base : s);
+    // 77BAR → RB 模式，15枚
+    if (line[0] === SymbolType.SEVEN && line[1] === SymbolType.SEVEN && line[2] === SymbolType.BAR) {
+      return { coins: 15, triggerBB: false, triggerRB: true, isReplay: false };
+    }
 
-    if (this.match(normalized, SymbolType.A)) return 50;
-    if (this.match(normalized, SymbolType.B)) return 20;
-    if (this.match(normalized, SymbolType.C)) return 10;
-    if (this.match(normalized, SymbolType.D)) return 5;
+    // 銅鐘三連 → 15枚
+    if (this.all(line, SymbolType.BELL)) {
+      return { coins: 15, triggerBB: false, triggerRB: false, isReplay: false };
+    }
 
-    // SCATTER
-    if (line.every(s => s === SymbolType.SCATTER)) return 100;
+    // 椰子三連 → 10枚
+    if (this.all(line, SymbolType.COCONUT)) {
+      return { coins: 10, triggerBB: false, triggerRB: false, isReplay: false };
+    }
 
-    return 0;
+    // 西瓜三連 → 7枚（FG 中為 15枚）
+    if (this.all(line, SymbolType.WATERMELON)) {
+      return { coins: isFreeGame ? 15 : 7, triggerBB: false, triggerRB: false, isReplay: false };
+    }
+
+    // REPLAY 三連 → 0枚，下局免費
+    if (this.all(line, SymbolType.REPLAY)) {
+      return { coins: 0, triggerBB: false, triggerRB: false, isReplay: true };
+    }
+
+    return none;
   }
 
-  private match(line: SymbolType[], target: SymbolType): boolean {
-    return line.every(s => s === target);
+  private all(line: SymbolType[], sym: SymbolType): boolean {
+    return line.every(s => s === sym);
   }
 }
