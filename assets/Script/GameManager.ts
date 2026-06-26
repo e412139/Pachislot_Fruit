@@ -62,6 +62,16 @@ export default class GameManager extends cc.Component {
   private readonly TENJOU_SPINS: number = 800;
   private tenjouCount: number = 0;
 
+  // 連莊系統：離開 FG 後 100 轉內再觸發 BB/RB 為連莊
+  private readonly RENZAN_WINDOW: number = 100;
+  private renzanStreak: number = 0;     // 當前連莊次數（1=第一次無連莊, 2=連莊1次...）
+  private spinsAfterFG: number = 0;     // 離開 FG 後的普通轉數
+  private isInRenzanWindow: boolean = false; // 是否在連莊窗口內
+
+  // 連莊測試專用
+  private renzanTestRemaining: number = 0;    // 還需自動觸發的 RB 次數
+  private pendingRenzanAfterSpin: boolean = false; // 這轉結束後自動觸發下一次 RB
+
   state: GameState = GameState.IDLE;
 
   rng = new RNGService();
@@ -242,6 +252,18 @@ export default class GameManager extends cc.Component {
       this.spinCount += 1;
       this.tenjouCount += 1;
       cc.log(`[天井] tenjouCount=${this.tenjouCount}/${this.TENJOU_SPINS}`);
+
+      // 連莊窗口倒數
+      if (this.isInRenzanWindow) {
+        this.spinsAfterFG++;
+        if (this.spinsAfterFG > this.RENZAN_WINDOW) {
+          // 超過 100 轉，連莊機會消失（邏輯歸零）
+          // 箭頭不隱藏：保留歷史紀錄，待後續 _shiftBars 推出圖表右緣才自然消失
+          this.isInRenzanWindow = false;
+          this.renzanStreak = 0;
+          cc.log('💔 連莊窗口關閉（超過 100 轉），箭頭保留為歷史紀錄');
+        }
+      }
       this._updateCountLabel();
 
       // 天井達標：強制下一轉 777 → BB
@@ -471,8 +493,15 @@ export default class GameManager extends cc.Component {
       return;
     }
 
-    this.endSpinSequence(); // 一次spin結束後，將燈號還原到待機狀態
+    this.endSpinSequence();
     this.state = GameState.IDLE;
+
+    // 連莊測試：中性一轉結束後自動觸發下一次 RB
+    if (this.pendingRenzanAfterSpin) {
+      this.pendingRenzanAfterSpin = false;
+      this.scheduleOnce(() => this._executeRenzanTestRB(), 0.5);
+      return;
+    }
 
     // ======== 自動旋轉 (Auto Spin) 判定邏輯 ========
     if (this.autoSpinCount !== 0) {
@@ -592,6 +621,27 @@ export default class GameManager extends cc.Component {
   /** 測試 🥥 椰子三連：10枚 × (bet/3) */
   forceWinD() { this._triggerLineWin(SymbolType.COCONUT); }
 
+  /**
+   * 測試 RB 連莊：
+   * 1. 立即進入 RB
+   * 2. RB 結束後自動做一轉中性轉（不中獎）
+   * 3. 再進入 RB（連莊 1 次）
+   * 4. 再做一轉中性轉
+   * 5. 再進入 RB（連莊 2 次）
+   */
+  forceRenzanRB() {
+    if (!this._checkTestReady()) return;
+    this.renzanTestRemaining = 2; // FG 結束後還要再觸發 2 次 RB
+    this._executeRenzanTestRB();
+  }
+
+  /** 直接進入 RB（連莊測試內部用） */
+  private _executeRenzanTestRB() {
+    this.renzanTestRemaining--;
+    cc.log(`[連莊測試] 觸發 RB，剩餘待觸發次數: ${this.renzanTestRemaining}`);
+    this.prepareEnterFreeGame('RB');
+  }
+
   private _checkTestReady(): boolean {
     if (this.autoSpinCount !== 0) {
       this.ui.showIOSAlert("請先停止「自動旋轉」後再進行測試！");
@@ -620,7 +670,18 @@ export default class GameManager extends cc.Component {
   private prepareEnterFreeGame(mode: 'BB' | 'RB' = 'BB') {
     this.fgMode = mode;
 
-    // 台數表：記錄 BB 或 RB，SPIN COUNTER 歸零
+    // 連莊判定：在 100 轉窗口內再觸發 → 連莊
+    if (this.isInRenzanWindow) {
+      this.renzanStreak++;
+      cc.log(`🔥 連莊！第 ${this.renzanStreak} 次連續 Bonus`);
+    } else {
+      this.renzanStreak = 1; // 新的一串開始
+    }
+    this.isInRenzanWindow = false;
+    this.spinsAfterFG = 0;
+
+    // 台數表：記錄 BB 或 RB（內部呼叫 _shiftBars，箭頭跟著位移）
+    // ⚠️ 必須在 showRenzan 之前呼叫，讓 shift 先完成
     try {
       if (this.counterDisplay) {
         mode === 'BB'
@@ -629,6 +690,14 @@ export default class GameManager extends cc.Component {
       }
     } catch (e) {
       cc.warn('[CounterDisplay] trigger error:', e);
+    }
+
+    // shift 完成後更新箭頭：
+    // - 連莊 >= 2：更新箭頭（延伸或新建）
+    // - 連莊 < 2（新一串或窗口外觸發）：不隱藏，箭頭保留歷史位置，
+    //   由 CounterDisplay._shiftBars 自然推出圖表右緣後才消失
+    if (this.counterDisplay && this.renzanStreak >= 2) {
+      (this.counterDisplay as any).showRenzan(this.renzanStreak);
     }
 
     this.spinCount = 0;
@@ -709,6 +778,31 @@ export default class GameManager extends cc.Component {
     cc.log("🔙 Exiting Free Game to Normal...");
     // 退出 FG：顯示台數表
     if (this.counterDisplay) this.counterDisplay.node.active = true;
+
+    // 啟動連莊 100 轉窗口
+    this.isInRenzanWindow = true;
+    this.spinsAfterFG = 0;
+    cc.log(`⏱️ 連莊窗口開啟，100 轉內再觸發 BB/RB 即連莊`);
+
+    // 連莊測試：FG 結束後還有待觸發的 RB → 做一轉中性轉再接 RB
+    if (this.renzanTestRemaining > 0) {
+      this.scheduleOnce(() => {
+        if (this.state === GameState.IDLE) {
+          // 中性結果：無任何連線，不中獎
+          const W = SymbolType.WATERMELON;
+          const R = SymbolType.REPLAY;
+          const C = SymbolType.COCONUT;
+          this.riggedResult = [
+            [W, R, C], // reel0: top=W  mid=R  bot=C
+            [R, W, C], // reel1: top=R  mid=W  bot=C
+            [C, W, R], // reel2: top=C  mid=W  bot=R
+          ];
+          this.pendingRenzanAfterSpin = true;
+          this.onSpinClick();
+        }
+      }, 1.0);
+    }
+
     this.ui.swapBackground(false);
     if (this.audioService) this.audioService.playNormalBGM();
 
