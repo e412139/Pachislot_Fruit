@@ -3,14 +3,12 @@
 // 掛載位置：node_Pot
 // Inspector 連結：
 //   potSprite          (cc.Node)
-//   smokeSprite        (cc.Node，初始 opacity=0)
 //   bubbleParticleNormal (cc.ParticleSystem，一般模式粒子，綠色)
 //   bubbleParticleFG     (cc.ParticleSystem，免費遊戲模式粒子，粉紫色)
 //
 // 節點建議結構：
 //   node_Pot
 //     ├── sprite_Pot
-//     ├── sprite_smoke
 //     ├── particle_BubbleNormal
 //     └── particle_BubbleFG
 
@@ -22,9 +20,6 @@ export default class SlotPotCtrl extends cc.Component {
     @property(cc.Node)
     potSprite: cc.Node = null;
 
-    @property(cc.Node)
-    smokeSprite: cc.Node = null;
-
     @property(cc.ParticleSystem)
     bubbleParticleNormal: cc.ParticleSystem = null; // 一般模式（綠色）
 
@@ -32,8 +27,6 @@ export default class SlotPotCtrl extends cc.Component {
     bubbleParticleFG: cc.ParticleSystem = null;     // 免費遊戲（粉紫色）
 
     private idleBaseY: number = 0;
-    private smokeBaseY: number = 0;
-    private smokeBaseScale: number = 1;
     private particleBaseScale: number = 1;
     private _isFreeGame: boolean = false;
 
@@ -52,10 +45,6 @@ export default class SlotPotCtrl extends cc.Component {
     onLoad() {
         if (this.potSprite) {
             this.idleBaseY = this.potSprite.y;
-        }
-        if (this.smokeSprite) {
-            this.smokeBaseY = this.smokeSprite.y;
-            this.smokeBaseScale = this.smokeSprite.scale;
         }
         if (this.bubbleParticleNormal) {
             this.particleBaseScale = this.bubbleParticleNormal.node.scale;
@@ -92,11 +81,6 @@ export default class SlotPotCtrl extends cc.Component {
     playIdle() {
         if (!this.potSprite) return;
         cc.Tween.stopAllByTarget(this.potSprite);
-
-        if (this.smokeSprite) {
-            cc.Tween.stopAllByTarget(this.smokeSprite);
-            this.smokeSprite.opacity = 0;
-        }
 
         // 非使用中的粒子立即隱藏
         const inactive = this._inactiveBubble;
@@ -166,28 +150,10 @@ export default class SlotPotCtrl extends cc.Component {
     playWin(isBigWin: boolean) {
         if (!this.potSprite) return;
         cc.Tween.stopAllByTarget(this.potSprite);
-        if (this.smokeSprite) cc.Tween.stopAllByTarget(this.smokeSprite);
 
         const bubble = this._activeBubble;
 
         if (isBigWin) {
-            if (this.smokeSprite) {
-                this.smokeSprite.opacity = 0;
-                this.smokeSprite.y = this.smokeBaseY;
-                this.smokeSprite.scale = this.smokeBaseScale;
-
-                cc.tween(this.smokeSprite)
-                    .repeatForever(
-                        cc.tween()
-                            .set({ opacity: 0, scale: this.smokeBaseScale })
-                            .parallel(
-                                cc.tween().to(0.5, { opacity: 255 }).delay(1.0).to(1.0, { opacity: 0 }),
-                                cc.tween().to(2.5, { scale: this.smokeBaseScale * 1.1 })
-                            )
-                    )
-                    .start();
-            }
-
             if (bubble) {
                 bubble.node.active = true;
                 cc.Tween.stopAllByTarget(bubble.node);
@@ -207,19 +173,6 @@ export default class SlotPotCtrl extends cc.Component {
                 .start();
 
         } else {
-            if (this.smokeSprite) {
-                this.smokeSprite.opacity = 0;
-                this.smokeSprite.y = this.smokeBaseY;
-                this.smokeSprite.scale = this.smokeBaseScale;
-
-                cc.tween(this.smokeSprite)
-                    .parallel(
-                        cc.tween().to(0.2, { opacity: 200 }).delay(0.2).to(0.4, { opacity: 0 }),
-                        cc.tween().to(0.8, { scale: this.smokeBaseScale * 1.05 })
-                    )
-                    .start();
-            }
-
             if (bubble) {
                 bubble.node.active = true;
                 bubble.resetSystem();
@@ -246,10 +199,6 @@ export default class SlotPotCtrl extends cc.Component {
             this.potSprite.angle = 0;
             this.potSprite.y = this.idleBaseY;
         }
-        if (this.smokeSprite) {
-            cc.Tween.stopAllByTarget(this.smokeSprite);
-            this.smokeSprite.opacity = 0;
-        }
         if (this.bubbleParticleNormal) {
             this.bubbleParticleNormal.stopSystem();
             this.bubbleParticleNormal.node.active = false;
@@ -263,7 +212,6 @@ export default class SlotPotCtrl extends cc.Component {
     onDestroy() {
         this.unscheduleAllCallbacks();
         if (this.potSprite) cc.Tween.stopAllByTarget(this.potSprite);
-        if (this.smokeSprite) cc.Tween.stopAllByTarget(this.smokeSprite);
         if (this.bubbleParticleNormal) cc.Tween.stopAllByTarget(this.bubbleParticleNormal.node);
         if (this.bubbleParticleFG) cc.Tween.stopAllByTarget(this.bubbleParticleFG.node);
     }
