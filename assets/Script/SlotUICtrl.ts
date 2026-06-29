@@ -481,6 +481,10 @@ export default class SlotUICtrl extends cc.Component {
         cc.log(`   - rulesHtmlFile: ${this.rulesHtmlFile ? "已連結" : "❌ 未連結"}`);
 
         if (this.node_webViewInfo) this.node_webViewInfo.active = true;
+        if (this.webView) {
+            this.webView.node.width = Math.min(600, cc.winSize.width - 20);
+            this.webView.node.height = Math.min(1050, cc.winSize.height - 80);
+        }
 
         if (this.webView && this.rulesHtmlFile) {
             // 註冊 JS Bridge 監聽 Scheme (cocos://close)

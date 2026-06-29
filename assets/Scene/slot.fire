@@ -16174,9 +16174,7 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_spriteFrame": {
-      "__uuid__": "b2f6e75d-1655-4a5e-86f9-d7b3bfa115e3"
-    },
+    "_spriteFrame": null,
     "_type": 0,
     "_sizeMode": 1,
     "_fillType": 0,
@@ -16527,9 +16525,6 @@
     "_enabled": true,
     "potSprite": {
       "__id__": 366
-    },
-    "smokeSprite": {
-      "__id__": 368
     },
     "bubbleParticleNormal": {
       "__id__": 371

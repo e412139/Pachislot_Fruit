@@ -373,9 +373,8 @@ export default class UIController extends cc.Component {
         this.node_webViewInfo.setPosition(0, 0);
 
         if (this.webView) {
-          // WebView 內容：上下各保留 8% 作為 Safe Area 邊距，不佔滿整個畫面
-          const marginY = Math.round(ch * 0.08);
-          this.webView.node.setContentSize(cw, ch - marginY * 2);
+          this.webView.node.width = Math.min(600, cc.winSize.width - 20);
+          this.webView.node.height = Math.min(1050, cc.winSize.height - 80);
           this.webView.node.setPosition(0, 0);
         }
       }
