@@ -474,42 +474,40 @@ export default class SlotGameCtrl extends cc.Component {
         // 1. 抓取 1, 3, 5 輪 (index 0, 2, 4) 上的 Scatter 節點
         const scatterNodes = this.reelManager.getSymbolNodesByID(SlotSymbolID.SCATTER);
         cc.log(`✨ 找到 ${scatterNodes.length} 個 Scatter 準備旋轉動畫`);
-        scatterNodes.forEach(node => {
-            // 先停止可能存在的殘留動畫，並將角度強制歸零，確保每次都能完整旋轉
-            cc.Tween.stopAllByTarget(node);
-            node.angle = 0;
-
-            // 恢復旋轉 720 度動畫
-            cc.tween(node)
-                .to(1.5, { angle: 720 }, { easing: 'cubicInOut' })
-                .start();
-        });
-
         // 播放中獎進入 FG 的音效
         if (this.sfxFGTrigger) {
             cc.audioEngine.playEffect(this.sfxFGTrigger, false);
         }
 
-        // 2. 1.5 秒後 (Scatter動畫播完)，開始轉入 Free Game 場景
-        this.scheduleOnce(() => {
-            // 彈出「恭喜進入 FG」文字 (總時長 1.5 秒)
-            this.ui.showFGCongratsLayout(1.5, () => {
-                // 當 Congrats 文字完全消失後，正式啟動 FG 邏輯
-                this.enterFreeGame();
-            });
+        // 最後一個 Scatter 旋轉結束後銜接後續流程，不需 scheduleOnce 猜時間
+        const lastIdx = scatterNodes.length - 1;
+        scatterNodes.forEach((node, idx) => {
+            // 先停止可能存在的殘留動畫，並將角度強制歸零，確保每次都能完整旋轉
+            cc.Tween.stopAllByTarget(node);
+            node.angle = 0;
 
-            // 💯 轉場密技：
-            // 在 Congrats 文字淡入到最顯眼的時候 (約第 0.3 秒)，我們「直接」切換背景！
-            // 這樣當 Congrats 在 1.5 秒後淡出時，底下已經悄悄變成 FG 場景了。
-            this.scheduleOnce(() => {
-                this.ui.swapFreeGameBackground(true);
-                // 切換為 FG BGM
-                if (this.bgmFreeGame) {
-                    cc.audioEngine.playMusic(this.bgmFreeGame, true);
-                }
-            }, 0.3);
+            const t = cc.tween(node)
+                .to(1.5, { angle: 720 }, { easing: 'cubicInOut' });
 
-        }, 1.5);
+            if (idx === lastIdx) {
+                t.call(() => {
+                    // 彈出「恭喜進入 FG」文字 (總時長 1.5 秒)
+                    this.ui.showFGCongratsLayout(1.5, () => {
+                        this.enterFreeGame();
+                    });
+                })
+                // Congrats 淡入完成時（0.3s），趁遮蔽切換背景與 BGM
+                .delay(0.3)
+                .call(() => {
+                    this.ui.swapFreeGameBackground(true);
+                    if (this.bgmFreeGame) {
+                        cc.audioEngine.playMusic(this.bgmFreeGame, true);
+                    }
+                });
+            }
+
+            t.start();
+        });
     }
 
     private enterFreeGame() {
@@ -628,12 +626,6 @@ export default class SlotGameCtrl extends cc.Component {
         // 轉場蓋住畫面前先隱藏 FG 粒子，不啟動一般粒子（避免轉場期間看到綠色泡泡）
         if (this.pot) this.pot.setFreeGameMode(false);
 
-        // 同樣趁魔法圈遮蔽時，無縫清空盤面殘留的贏分狀態
-        this.scheduleOnce(() => {
-            this.ui.clearWinAmount();
-            this.reelManager.stopAllWinAnimations();
-        }, 0.5);
-
         this.ui.playMagicTransition(false, () => {
             // 轉場 reveal 完成後才啟動一般模式待機粒子
             if (this.pot) this.pot.playIdle();
@@ -651,6 +643,10 @@ export default class SlotGameCtrl extends cc.Component {
             if (this.bgmNormal) {
                 cc.audioEngine.playMusic(this.bgmNormal, true);
             }
+        }, () => {
+            // 魔法圈遮蔽完成時清空殘留贏分（精準時機，替代 scheduleOnce(0.5)）
+            this.ui.clearWinAmount();
+            this.reelManager.stopAllWinAnimations();
         });
     }
 

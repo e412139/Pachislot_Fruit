@@ -321,10 +321,11 @@ export default class SlotUICtrl extends cc.Component {
      * @param isEntering true: 進入 Free Game (切換為 fg 背景), false: 離開 (切換為普通背景)
      * @param onComplete 動畫遮擋點 (可在此刻刷新資料) 或結束 Callback
      */
-    playMagicTransition(isEntering: boolean, onComplete?: () => void) {
+    playMagicTransition(isEntering: boolean, onComplete?: () => void, onMidReveal?: () => void) {
         if (!this.node_magicCircle) {
             // 如果沒有魔法圈節點，直接換圖並 callback
             this.swapFreeGameBackground(isEntering);
+            if (onMidReveal) onMidReveal();
             if (onComplete) onComplete();
             return;
         }
@@ -341,6 +342,7 @@ export default class SlotUICtrl extends cc.Component {
             )
             .call(() => {
                 this.swapFreeGameBackground(isEntering);
+                if (onMidReveal) onMidReveal();
             })
             .delay(0.5) // 停留一下讓玩家感受到轉換
             .parallel(
