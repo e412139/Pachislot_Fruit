@@ -1,6 +1,5 @@
 // SlotGameCtrl.ts
-// Alchemy Slot — 主控制器（5×4 / 1024 Ways）
-// 掛載位置：node_SlotGame（主節點）
+// 主控制器（組裝 + 協調）：持有 Inspector 屬性、實作所有 delegate、測試模式入口
 //
 // Inspector 連結一覽：
 //   reelManager      — SlotReelManager 元件所在節點
@@ -16,19 +15,28 @@
 import { SlotGamePhase } from "./SlotGameState";
 import { SlotSymbolID } from "./SlotSymbolDef";
 import SlotRNG from "./SlotRNG";
-import SlotMath from "./SlotMath";
 import SlotReelManager from "./SlotReelManager";
 import SlotUICtrl from "./SlotUICtrl";
 import SlotPotCtrl from "./SlotPotCtrl";
 import CoinSpawner from "./CoinSpawner";
+import SlotBigWinPresenter from "./SlotBigWinPresenter";
+import SlotSpinFlowController from "./SlotSpinFlowController";
+import SlotFreeGameController from "./SlotFreeGameController";
+import SlotAutoSpinController from "./SlotAutoSpinController";
+import SlotInputHandler from "./SlotInputHandler";
+import {
+    SpinResultData,
+    ISpinFlowDelegate,
+    IFreeGameDelegate,
+    IInputDelegate,
+    IAutoSpinDelegate,
+} from "./SlotInterfaces";
 
 const { ccclass, property } = cc._decorator;
 
-/** 倍率 ≥ 此數值時觸發 BigWin 演出 */
-const BIG_WIN_THRESHOLD = 50;
-
 @ccclass
-export default class SlotGameCtrl extends cc.Component {
+export default class SlotGameCtrl extends cc.Component
+    implements ISpinFlowDelegate, IFreeGameDelegate, IInputDelegate, IAutoSpinDelegate {
 
     // ─── Inspector 屬性 ──────────────────────────────────────
 
@@ -74,30 +82,57 @@ export default class SlotGameCtrl extends cc.Component {
     @property(cc.AudioClip)
     sfxEmptyBottle: cc.AudioClip = null;
 
-    // ─── 私有狀態 ────────────────────────────────────────────
+    // ─── 遊戲狀態（由 SlotGameCtrl 統一持有）────────────────
 
     private phase: SlotGamePhase = SlotGamePhase.IDLE;
-    private rng: SlotRNG = new SlotRNG();
-    private spinMatrix: SlotSymbolID[][] = null;
-    private riggedMatrix: SlotSymbolID[][] = null; // 測試模式用的強制結果
-    private riggedMatrixQueue: SlotSymbolID[][][] = []; // 測試模式用的連續盤面序列
-
     credit: number = 1000;
     bet: number = 10;
-
-    private autoSpinCount: number = 0;   // -1 = 無限
-    private isLongPress: boolean = false;
-    private bigWinAudioID: number = -1;
-
-    // ─── Free Game 狀態 ──────────────────────────────────────
     private isFreeGame: boolean = false;
-    private freeSpinsLeft: number = 0;
-    private freeGameTotalWin: number = 0;
-    private savedAutoSpinCount: number = 0; // 進入 FG 前保存原本的 AutoSpin 狀態
-    private fgMultiplier: number = 2; // 空瓶倍率，預設 2
+    private savedAutoSpinCount: number = 0;
+
+    // ─── 盤面產生（含測試模式用的寫死序列）──────────────────
+
+    private rng: SlotRNG = new SlotRNG();
+    private riggedMatrix: SlotSymbolID[][] = null;
+    private riggedMatrixQueue: SlotSymbolID[][][] = [];
+
+    // ─── 子 Controller ───────────────────────────────────────
+
+    private bigWin: SlotBigWinPresenter;
+    private spinFlow: SlotSpinFlowController;
+    private freeGame: SlotFreeGameController;
+    private autoSpin: SlotAutoSpinController;
+    private inputHandler: SlotInputHandler;
+
     // ─── 生命週期 ────────────────────────────────────────────
 
     onLoad() {
+        this.bigWin = new SlotBigWinPresenter(this.ui, this.pot, this.coinSpawner, this.bigWinAudio);
+
+        this.spinFlow = new SlotSpinFlowController(
+            this.reelManager, this.pot, this.ui,
+            this.fireAudio, this, this.bigWin, this
+        );
+
+        this.freeGame = new SlotFreeGameController(
+            this.reelManager, this.pot, this.ui, this.coinSpawner, this,
+            this.bigWin, this.sfxFGTrigger, this.sfxEmptyBottle,
+            this.bgmNormal, this.bgmFreeGame, this
+        );
+
+        this.autoSpin = new SlotAutoSpinController(
+            this.ui, this.toggleSpeed, this,
+            () => this.phase === SlotGamePhase.IDLE,
+            this
+        );
+
+        this.inputHandler = new SlotInputHandler(
+            this.spinParticle, this.ui, this,
+            () => this.phase,
+            () => this.isFreeGame,
+            this
+        );
+
         this.ui.updateScore(this.credit);
         this.ui.clearWinAmount();
         this.ui.hideBigWinLayer();
@@ -106,16 +141,15 @@ export default class SlotGameCtrl extends cc.Component {
         if (this.spinParticle) this.spinParticle.stopSystem();
 
         if (this.btn_spinNode) {
-            // 拿掉 true，避免攔截到其他選單按鈕的事件！
             this.btn_spinNode.on(cc.Node.EventType.TOUCH_START, this.onTouchStart, this);
             this.btn_spinNode.on(cc.Node.EventType.TOUCH_END, this.onTouchEnd, this);
             this.btn_spinNode.on(cc.Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
         }
 
-        // 強制由程式碼接管 Auto Spin 選單按鈕，無視編輯器的 Bug
-        this.bindAutoSpinButtons();
+        if (this.ui && this.ui.node_AutoSpinMenu) {
+            this.autoSpin.bindButtons(this.ui.node_AutoSpinMenu);
+        }
 
-        // 既然在 Lobby 已經提前解鎖，進場景就可以毫無顧忌地直接播放了
         if (this.bgmNormal && !cc.audioEngine.isMusicPlaying()) {
             cc.audioEngine.playMusic(this.bgmNormal, true);
         }
@@ -128,107 +162,30 @@ export default class SlotGameCtrl extends cc.Component {
             this.btn_spinNode.off(cc.Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
         }
 
-        // 離開場景時強制停止所有音訊
         cc.audioEngine.stopAll();
-
-        // 停止大獎效果 (金幣/重複音效)
-        this.stopBigWinEffects();
-
-        // 停止所有排程與 Tween
+        if (this.bigWin) this.bigWin.stopBigWinEffects();
         this.unscheduleAllCallbacks();
         cc.Tween.stopAllByTarget(this);
     }
 
-    // ─── 觸控 / 長按 ────────────────────────────────────────
+    // ─── 觸控中繼（轉交 InputHandler）────────────────────────
 
-    private onTouchStart() {
-        cc.log("🖱️ 按下去啦！(TOUCH_START) 目前 Phase=", SlotGamePhase[this.phase]);
-        if (this.isFreeGame) return; // Free Game 期間鎖定點擊操作
-        if (this.phase !== SlotGamePhase.IDLE) return;
-        this.isLongPress = false;
-        this.scheduleOnce(this.triggerLongPress, 0.5);
-    }
+    private onTouchStart() { this.inputHandler.onTouchStart(); }
+    private onTouchEnd() { this.inputHandler.onTouchEnd(); }
+    private onTouchCancel() { this.inputHandler.onTouchCancel(); }
 
-    private onTouchEnd() {
-        cc.log("🖱️ 放開啦！(TOUCH_END) 是否為長按？", this.isLongPress);
-        this.unschedule(this.triggerLongPress);
-        if (this.spinParticle) this.spinParticle.stopSystem();
-        if (this.isFreeGame) return; // Free Game 期間鎖定點擊操作
-        if (this.phase !== SlotGamePhase.IDLE) return;
-        if (!this.isLongPress) {
-            // 短按：中止 auto spin 並執行一次正常旋轉
-            this.autoSpinCount = 0;
-            this.ui.updateSpinButton(0);
-            this.onSpinClick();
-        }
-    }
+    // ─── IInputDelegate ──────────────────────────────────────
 
-    private onTouchCancel() {
-        cc.log("🖱️ 觸控取消！(TOUCH_CANCEL)");
-        this.unschedule(this.triggerLongPress);
-        if (this.spinParticle) this.spinParticle.stopSystem();
-    }
-
-    private triggerLongPress() {
-        this.isLongPress = true;
-        cc.log("👉 長按：展開 Auto Spin 選單");
-        if (this.spinParticle) this.spinParticle.resetSystem();
-        this.ui.showAutoSpinMenu();
-    }
-
-    // ─── Auto Spin 選單按鈕程式綁定 ──────────────────────
-
-    private bindAutoSpinButtons() {
-        if (!this.ui || !this.ui.node_AutoSpinMenu) return;
-
-        const menu = this.ui.node_AutoSpinMenu;
-        const buttons = [
-            { name: "btn_20", count: 20 },
-            { name: "btn_50", count: 50 },
-            { name: "btn_100", count: 100 },
-            { name: "btn_250", count: 250 },
-            { name: "btn_loop", count: -1 }
-        ];
-
-        buttons.forEach(b => {
-            const btnNode = menu.getChildByName(b.name);
-            if (btnNode) {
-                // 綁定原生觸控，完全繞過 cc.Button 的層級問題
-                btnNode.on(cc.Node.EventType.TOUCH_END, (e: cc.Event.EventTouch) => {
-                    e.stopPropagation();
-                    this.onAutoSpinSelected(null, b.count.toString());
-                }, this);
-
-                // 如果感應區跑位，我們連圖片 (Background) 都綁上，確保點得到圖就生效
-                const bg = btnNode.getChildByName("Background");
-                if (bg) {
-                    bg.on(cc.Node.EventType.TOUCH_END, (e: cc.Event.EventTouch) => {
-                        e.stopPropagation();
-                        this.onAutoSpinSelected(null, b.count.toString());
-                    }, this);
-                }
-            }
-        });
-    }
-
-    /** 供場景中 Auto Spin 選單按鈕的 Click Events 呼叫 */
-    onAutoSpinSelected(event: any, data: string) {
-        cc.log(`✅ [Debug] 成功觸發 AutoSpin：${data} 局`);
-        const count = parseInt(data);
-        this.autoSpinCount = count;
-        this.ui.hideAutoSpinMenu();
-        this.ui.updateSpinButton(count);
-        cc.log(`⚙️ Auto Spin 設定：${count === -1 ? "無限" : count} 局`);
+    onSpinRequested(): void {
+        this.autoSpin.reset();
         this.onSpinClick();
     }
 
-    // ─── 主流程 ──────────────────────────────────────────────
+    // ─── 主旋轉入口（供 InputHandler、AutoSpin、FreeGame 共用）
 
-    /** Spin 按鈕點擊入口（供短按、auto spin 共用） */
-    onSpinClick() {
+    onSpinClick(): void {
         if (this.phase !== SlotGamePhase.IDLE) return;
-        // 如果處於 FG 但次數歸零（正在結算退場），禁止繼續 Spin
-        if (this.isFreeGame && this.freeSpinsLeft <= 0) return;
+        if (this.isFreeGame && this.freeGame.freeSpinsLeft <= 0) return;
 
         this.ui.hideAutoSpinMenu();
 
@@ -236,7 +193,6 @@ export default class SlotGameCtrl extends cc.Component {
             cc.audioEngine.playEffect(this.betButtonAudio, false);
         }
 
-        // 普通遊戲時扣除 Credit
         if (!this.isFreeGame) {
             this.credit -= this.bet;
             this.ui.updateScore(this.credit);
@@ -244,433 +200,114 @@ export default class SlotGameCtrl extends cc.Component {
 
         this.ui.clearWinAmount();
         this.ui.hideBigWinLayer();
-        this.stopBigWinEffects();
+        this.bigWin.stopBigWinEffects();
 
-        this.startSpin();
-    }
-
-    private startSpin() {
         this.phase = SlotGamePhase.SPINNING;
+        const matrix = this.generateMatrix();
+        const isQuickSpin = this.toggleSpeed ? this.toggleSpeed.isChecked : false;
 
-        // 清除上一局的中獎動畫
-        this.reelManager.stopAllWinAnimations();
+        this.spinFlow.startSpin({ bet: this.bet, isFreeGame: this.isFreeGame, isQuickSpin, matrix });
+    }
 
-        // 鍋子動畫：新局開始
-        if (this.pot) {
-            this.pot.stopAll();
-            this.pot.playSpin();
-        }
-
-        // 產生盤面
+    private generateMatrix(): SlotSymbolID[][] {
         if (this.riggedMatrixQueue && this.riggedMatrixQueue.length > 0) {
-            this.spinMatrix = this.riggedMatrixQueue.shift();
-            cc.log(`🎲 [TEST MODE] 寫死序列盤面 (這局之後還剩 ${this.riggedMatrixQueue.length} 局):`, JSON.stringify(this.spinMatrix));
-        } else if (this.riggedMatrix) {
-            this.spinMatrix = this.riggedMatrix;
+            const m = this.riggedMatrixQueue.shift();
+            cc.log(`🎲 [TEST MODE] 寫死序列盤面 (這局之後還剩 ${this.riggedMatrixQueue.length} 局):`, JSON.stringify(m));
+            return m;
+        }
+        if (this.riggedMatrix) {
+            const m = this.riggedMatrix;
             this.riggedMatrix = null;
-            cc.log("🎲 [TEST MODE] 寫死盤面:", JSON.stringify(this.spinMatrix));
-        } else {
-            this.spinMatrix = this.rng.generateMatrix();
-            cc.log("🎲 隨機盤面:", JSON.stringify(this.spinMatrix));
+            cc.log("🎲 [TEST MODE] 寫死盤面:", JSON.stringify(m));
+            return m;
         }
-
-        // 讀取快轉狀態並同步給管理器
-        const isQuickSpin = this.toggleSpeed ? this.toggleSpeed.isChecked : false;
-        this.reelManager.setQuickSpinMode(isQuickSpin);
-
-        // 開始旋轉
-        this.reelManager.spinAll();
-
-        // 依據是否快轉，控制旋轉持續的時間
-        const waitToStop = isQuickSpin ? 0.2 : 1.0;
-
-        this.scheduleOnce(() => {
-            this.phase = SlotGamePhase.STOPPING;
-            this.reelManager.stopAll(this.spinMatrix, () => {
-                this.onAllReelsStopped();
-            });
-        }, waitToStop);
+        const m = this.rng.generateMatrix();
+        cc.log("🎲 隨機盤面:", JSON.stringify(m));
+        return m;
     }
 
-    private onAllReelsStopped() {
+    // ─── ISpinFlowDelegate ───────────────────────────────────
+
+    onEnterStoppingPhase(): void {
+        this.phase = SlotGamePhase.STOPPING;
+    }
+
+    onEnterResultPhase(): void {
         this.phase = SlotGamePhase.RESULT;
-
-        // 1. 檢查魔法門擴展條件
-        const magicDoorCols: number[] = [];
-        this.spinMatrix.forEach((col, idx) => {
-            if (col.includes(SlotSymbolID.MAGIC_DOOR)) {
-                magicDoorCols.push(idx);
-            }
-        });
-
-        // 判斷是否達成擴展門檻 (≥ 3 根轉輪)
-        if (magicDoorCols.length >= 3) {
-            this.handleMagicDoorExpansion(magicDoorCols);
-            return; // 等擴展結束再結算
-        }
-
-        // --- 若無擴展，直接進入原本的對獎流程 ---
-        this.processWaysResult();
     }
 
-    private handleMagicDoorExpansion(cols: number[]) {
-        cc.log(`🚪 觸發魔法門擴展！共 ${cols.length} 輪`);
-
-        // 1. 決定變身的幸運圖形 (限定 S1~A 或 WILD/BOTTLE)
-        const allowedRevealSymbols = [
-            SlotSymbolID.S1, SlotSymbolID.S2, SlotSymbolID.S3, SlotSymbolID.S4, SlotSymbolID.S5,
-            SlotSymbolID.TEN, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K, SlotSymbolID.A,
-            SlotSymbolID.WILD
-        ];
-        if (this.isFreeGame) {
-            allowedRevealSymbols.push(SlotSymbolID.BOTTLE);
-        }
-
-        const luckySymbol = allowedRevealSymbols[Math.floor(Math.random() * allowedRevealSymbols.length)];
-        cc.log(`✨ 魔法門決定揭曉變成圖標：${SlotSymbolID[luckySymbol]}`);
-
-        // 2. 呼叫 ReelManager 播放動畫，並傳遞矩陣供其修改
-        this.reelManager.playMagicDoorExpansion(cols, luckySymbol, this.spinMatrix, () => {
-            // 3. 動畫結束，盤面已就緒，接續對獎
-            this.processWaysResult();
-        });
-    }
-
-    private processWaysResult() {
-        const { totalMultiplier, results, winPositions } =
-            SlotMath.calculateWays(this.spinMatrix);
-
-        cc.log("📊 Ways 結果:", results.map(r =>
-            `${SlotSymbolID[r.symbol]} x${r.reelCount}reels, ${r.ways}ways, ${r.totalPayout}x`
-        ));
-        cc.log("💰 總倍率 (totalMultiplier):", totalMultiplier);
-
-        const isScatterTriggered = SlotMath.checkScatterTrigger(this.spinMatrix);
-        const isBigWin = totalMultiplier >= BIG_WIN_THRESHOLD;
-
-        if (totalMultiplier > 0) {
-            const coinsWon = totalMultiplier * this.bet;
-            this.credit += coinsWon;
+    onSpinResult(result: SpinResultData): void {
+        if (result.coinsWon > 0) {
+            this.credit += result.coinsWon;
             this.ui.updateScore(this.credit);
-            this.ui.showWinAmount(coinsWon);
-
-            // 中獎格閃爍
-            this.reelManager.playWinAnimations(winPositions);
-
-            // 如果是要進入 FG，不要跳大獎彈窗，留給最後 FG 結算
-            if (!isScatterTriggered && !this.isFreeGame) {
-                if (this.pot) this.pot.playWin(isBigWin);
-                if (isBigWin) {
-                    this.showBigWin(coinsWon, totalMultiplier);
-                } else if (this.fireAudio) {
-                    cc.audioEngine.playEffect(this.fireAudio, false);
-                }
-            } else if (this.isFreeGame) {
-                // FG 期間，正常跑鍋子特效與音效
-                if (this.pot) this.pot.playWin(isBigWin);
-                if (this.fireAudio) cc.audioEngine.playEffect(this.fireAudio, false);
-            }
-
-            cc.log(`🎉 中獎！${coinsWon} 分（倍率 ${totalMultiplier}x）`);
-        } else {
-            // 未中獎，鍋子回 Idle
-            if (this.pot) {
-                this.scheduleOnce(() => { this.pot.playIdle(); }, 0.3);
-            }
         }
 
-        // ── 判斷 SCATTER 是否達成 Free Game 條件 ──────────────────
-        if (isScatterTriggered && !this.isFreeGame) {
+        if (result.isScatterTriggered && !this.isFreeGame) {
             cc.log(`⭐ 1, 3, 5 輪皆出現 SCATTER：準備進入 Free Game！`);
-            let delayToFG = totalMultiplier > 0 ? 1.5 : 0.5;
-
-            this.scheduleOnce(() => {
-                this.prepareEnterFreeGame();
-            }, delayToFG);
+            const delay = result.totalMultiplier > 0 ? 1.5 : 0.5;
+            this.scheduleOnce(() => { this.freeGame.prepareEnterFreeGame(); }, delay);
             return;
         }
 
-        // FG 中正常扣除次數、處理空瓶倍率並進入下一局
         if (this.isFreeGame) {
-            this.handleFreeGameSpin(totalMultiplier);
+            this.freeGame.handleFGSpin(result.totalMultiplier, this.bet);
             return;
         }
 
-        // 一般模式結束，看是否 AutoSpin
         this.phase = SlotGamePhase.IDLE;
-        this.handleAutoSpin(totalMultiplier);
+        this.autoSpin.handleAutoSpin(result.totalMultiplier);
     }
 
-    // ─── BigWin 演出 ─────────────────────────────────────────
+    // ─── IFreeGameDelegate ───────────────────────────────────
 
-    private showBigWin(coinsWon: number, multiplier: number) {
-        // 委派 UI 播動畫；跑分結束後停金幣與音效
-        this.ui.showBigWinAnimation(coinsWon, multiplier, () => {
-            this.stopBigWinEffects();
-            if (this.pot) this.pot.playIdle();
-        });
-
-        if (this.coinSpawner) this.coinSpawner.startContinuousSpawning();
-
-        if (this.bigWinAudio && this.bigWinAudioID === -1) {
-            this.bigWinAudioID = cc.audioEngine.playEffect(this.bigWinAudio, true);
-        }
-    }
-
-    private stopBigWinEffects() {
-        if (this.coinSpawner) this.coinSpawner.stopContinuousSpawning();
-        if (this.bigWinAudioID !== -1) {
-            cc.audioEngine.stopEffect(this.bigWinAudioID);
-            this.bigWinAudioID = -1;
-        }
-    }
-
-    // ─── Auto Spin ───────────────────────────────────────────
-
-    private handleAutoSpin(totalMultiplier: number) {
-        cc.log(`🔄 [AutoSpin] 進入 handleAutoSpin, 目前剩餘局數: ${this.autoSpinCount}`);
-
-        if (this.autoSpinCount === 0) {
-            cc.log(`🛑 [AutoSpin] 局數為 0，停止自動轉`);
-            return;
-        }
-
-        if (this.autoSpinCount > 0) {
-            this.autoSpinCount--;
-            this.ui.updateSpinButton(this.autoSpinCount);
-            cc.log(`🔄 [AutoSpin] 扣除一次, 剩下: ${this.autoSpinCount}`);
-        }
-
-        const isQuickSpin = this.toggleSpeed ? this.toggleSpeed.isChecked : false;
-
-        // 大獎等久一點，讓玩家看完動畫
-        let delay = 1.0;
-        if (totalMultiplier > 0) {
-            delay = totalMultiplier >= BIG_WIN_THRESHOLD ? 3.0 : (isQuickSpin ? 0.6 : 1.6);
-        } else {
-            delay = isQuickSpin ? 0.3 : 1.0;
-        }
-
-        cc.log(`⏳ [AutoSpin] 準備等待 ${delay} 秒後觸發下一次 onSpinClick`);
-
-        this.scheduleOnce(() => {
-            cc.log(`⏰ [AutoSpin] 延遲結束！檢查條件：Phase = ${SlotGamePhase[this.phase]}, autoSpinCount = ${this.autoSpinCount}`);
-            if (this.phase === SlotGamePhase.IDLE && this.autoSpinCount !== 0) {
-                cc.log(`🚀 [AutoSpin] 條件符合，執行 onSpinClick()`);
-                this.onSpinClick();
-            } else {
-                cc.log(`❌ [AutoSpin] 條件不符！無法自動轉`);
-            }
-        }, delay);
-    }
-
-    // ─── Free Game 流程 ──────────────────────────────────────
-
-    private prepareEnterFreeGame() {
-        // 💯 在進場前置動作一啟動時，就立刻清空贏分跟所有的連線閃爍框
-        this.ui.clearWinAmount();
-        this.reelManager.stopAllWinAnimations();
-
-        // 1. 抓取 1, 3, 5 輪 (index 0, 2, 4) 上的 Scatter 節點
-        const scatterNodes = this.reelManager.getSymbolNodesByID(SlotSymbolID.SCATTER);
-        cc.log(`✨ 找到 ${scatterNodes.length} 個 Scatter 準備旋轉動畫`);
-        // 播放中獎進入 FG 的音效
-        if (this.sfxFGTrigger) {
-            cc.audioEngine.playEffect(this.sfxFGTrigger, false);
-        }
-
-        // 最後一個 Scatter 旋轉結束後銜接後續流程，不需 scheduleOnce 猜時間
-        const lastIdx = scatterNodes.length - 1;
-        scatterNodes.forEach((node, idx) => {
-            // 先停止可能存在的殘留動畫，並將角度強制歸零，確保每次都能完整旋轉
-            cc.Tween.stopAllByTarget(node);
-            node.angle = 0;
-
-            const t = cc.tween(node)
-                .to(1.5, { angle: 720 }, { easing: 'cubicInOut' });
-
-            if (idx === lastIdx) {
-                t.call(() => {
-                    // 彈出「恭喜進入 FG」文字 (總時長 1.5 秒)
-                    this.ui.showFGCongratsLayout(1.5, () => {
-                        this.enterFreeGame();
-                    });
-                })
-                // Congrats 淡入完成時（0.3s），趁遮蔽切換背景與 BGM
-                .delay(0.3)
-                .call(() => {
-                    this.ui.swapFreeGameBackground(true);
-                    if (this.bgmFreeGame) {
-                        cc.audioEngine.playMusic(this.bgmFreeGame, true);
-                    }
-                });
-            }
-
-            t.start();
-        });
-    }
-
-    private enterFreeGame() {
+    onFreeGameEntered(): void {
         this.isFreeGame = true;
-        if (this.pot) this.pot.setFreeGameMode(true); // 粒子切換為 FG 粉紫色
-        this.freeSpinsLeft = 8;
-        this.freeGameTotalWin = 0;
-        this.fgMultiplier = 2;
-
-        this.savedAutoSpinCount = this.autoSpinCount;
-        this.autoSpinCount = 0;
-
-        // 鎖定 UI 狀態
-        this.ui.updateSpinButton(this.freeSpinsLeft);
-        this.ui.updateFGMultiplier(this.fgMultiplier);
-
-        cc.log(`✅ 恭喜動畫播完，切換至 IDLE 並自動開始第一局`);
+        this.savedAutoSpinCount = this.autoSpin.count;
+        this.autoSpin.count = 0;
         this.phase = SlotGamePhase.IDLE;
         this.onSpinClick();
     }
 
-    private handleFreeGameSpin(totalMultiplier: number) {
-        if (totalMultiplier > 0) {
-            this.freeGameTotalWin += totalMultiplier * this.bet; // 累積本局原始分數
-        }
-
-        // 掃描這局有幾個 BOTTLE
-        let bottleNodes: cc.Node[] = this.reelManager.getSymbolNodesByID(SlotSymbolID.BOTTLE);
-        let bottleDelay = 0;
-
-        if (bottleNodes.length > 0) {
-            cc.log(`🍾 發現 ${bottleNodes.length} 個空瓶！飛行動畫準備`);
-            bottleNodes.forEach((node, idx) => {
-                // 直接用 symbol node 取得真實世界座標
-                const worldPos = node.convertToWorldSpaceAR(cc.Vec2.ZERO);
-
-                this.scheduleOnce(() => {
-                    // 播放瓶子飛出的音效
-                    if (this.sfxEmptyBottle) {
-                        cc.audioEngine.playEffect(this.sfxEmptyBottle, false);
-                    }
-
-                    this.ui.playBottleFlyAnimation(worldPos, () => {
-                        this.fgMultiplier++;
-                        this.ui.updateFGMultiplier(this.fgMultiplier);
-                        cc.log(`📈 瓶子到達！當前倍數: x${this.fgMultiplier}`);
-                    });
-                }, idx * 0.4); // 每個瓶子間隔 0.4s 飛走
-            });
-            bottleDelay = bottleNodes.length * 0.4 + 0.6; // 等最後一個瓶子到達
-        }
-
-        this.freeSpinsLeft--;
-        this.ui.updateSpinButton(this.freeSpinsLeft);
-
-        let delayTime = 1.0;
-        if (totalMultiplier > 0) {
-            delayTime = totalMultiplier >= BIG_WIN_THRESHOLD ? 2.5 : 1.6;
-        }
-
-        const waitTime = Math.max(delayTime, bottleDelay);
-
-        if (this.freeSpinsLeft > 0) {
-            this.scheduleOnce(() => {
-                this.phase = SlotGamePhase.IDLE;
-                this.onSpinClick();
-            }, waitTime);
-        } else {
-            // Free Game 8 次結束，進行退場
-            this.scheduleOnce(() => {
-                this.processFreeGameEnd();
-            }, waitTime + 1.0); // 多屏息 1 秒
-        }
-    }
-
-    private processFreeGameEnd() {
-        cc.log(`🏆 Free Game 結束！原始得分: ${this.freeGameTotalWin}, 最終乘數: x${this.fgMultiplier}`);
-
-        // 分數 x FG最終倍數
-        const finalWinAmount = this.freeGameTotalWin * this.fgMultiplier;
-        const totalFinalMulti = finalWinAmount / this.bet;
-
-        cc.log(`💵 最終大獎金額: ${finalWinAmount} (總倍率: ${totalFinalMulti}x)`);
-
-        if (finalWinAmount > 0) {
-            const extraWin = this.freeGameTotalWin * (this.fgMultiplier - 1);
-            this.credit += extraWin;
-            this.ui.updateScore(this.credit);
-
-            // 展示最終 Total Win 畫面 (停留 2 秒)
-            this.ui.showFGTotalWinLayout(finalWinAmount, this.fgMultiplier, 2.0, () => {
-                // 停止 FG BGM
-                cc.audioEngine.stopMusic();
-
-                // 如果總倍率達到大獎，進行大獎回放演出
-                if (totalFinalMulti >= BIG_WIN_THRESHOLD) {
-                    this.ui.showBigWinAnimation(finalWinAmount, totalFinalMulti, () => {
-                        this.stopBigWinEffects();
-                        this.exitFreeGame();
-                    });
-                    if (this.coinSpawner) this.coinSpawner.startContinuousSpawning();
-                    if (this.bigWinAudio && this.bigWinAudioID === -1) {
-                        this.bigWinAudioID = cc.audioEngine.playEffect(this.bigWinAudio, true);
-                    }
-                } else {
-                    // 沒有到達 BIG_WIN 則直接退出
-                    this.exitFreeGame();
-                }
-            });
-        } else {
-            this.exitFreeGame();
-        }
-    }
-
-    private exitFreeGame() {
-        // 轉場蓋住畫面前先隱藏 FG 粒子，不啟動一般粒子（避免轉場期間看到綠色泡泡）
-        if (this.pot) this.pot.setFreeGameMode(false);
-
-        this.ui.playMagicTransition(false, () => {
-            // 轉場 reveal 完成後才啟動一般模式待機粒子
-            if (this.pot) this.pot.playIdle();
-            this.isFreeGame = false;
-            // 回復原本 AutoSpin
-            this.autoSpinCount = this.savedAutoSpinCount;
-            this.ui.updateSpinButton(this.autoSpinCount);
-
-            this.phase = SlotGamePhase.IDLE;
-            if (this.autoSpinCount !== 0) {
-                this.handleAutoSpin(0);
-            }
-
-            // 回復一般模式 BGM
-            if (this.bgmNormal) {
-                cc.audioEngine.playMusic(this.bgmNormal, true);
-            }
-        }, () => {
-            // 魔法圈遮蔽完成時清空殘留贏分（精準時機，替代 scheduleOnce(0.5)）
-            this.ui.clearWinAmount();
-            this.reelManager.stopAllWinAnimations();
-        });
-    }
-
-    // ================= 測試模式專用按鈕綁定區 =================
-
-    /**
-     * 共用觸發測試盤面函式
-     */
-    private triggerTestMatrix(matrix: SlotSymbolID[][]) {
-        if (this.checkTestModeLocked()) return;
-
-        this.riggedMatrixQueue = []; // 打斷連續測試序列
-        this.riggedMatrix = matrix;
+    onFGNextSpin(): void {
+        this.phase = SlotGamePhase.IDLE;
         this.onSpinClick();
     }
 
-    /** 檢查當前是否允許觸發測試指令 */
+    onFGBonusWin(extraWin: number): void {
+        this.credit += extraWin;
+        this.ui.updateScore(this.credit);
+    }
+
+    onFreeGameExited(): void {
+        this.isFreeGame = false;
+        this.autoSpin.count = this.savedAutoSpinCount;
+        this.ui.updateSpinButton(this.autoSpin.count);
+        this.phase = SlotGamePhase.IDLE;
+        if (this.autoSpin.count !== 0) {
+            this.autoSpin.handleAutoSpin(0);
+        }
+    }
+
+    // ─── IAutoSpinDelegate ───────────────────────────────────
+
+    onAutoSpinTick(): void {
+        this.onSpinClick();
+    }
+
+    // ─── 場景 Click Event 相容（供 Inspector 設定的按鈕呼叫）─
+
+    onAutoSpinSelected(event: any, data: string): void {
+        this.autoSpin.onAutoSpinSelected(parseInt(data));
+    }
+
+    // ================= 測試模式專用 =================
+
     private checkTestModeLocked(): boolean {
         if (this.isFreeGame) {
             this.ui.showIOSAlert("免費遊戲期間禁止使用大獎測試功能！");
             return true;
         }
-        // -1 為無限旋轉， > 0 為剩餘旋轉次數
-        if (this.autoSpinCount !== 0) {
+        if (this.autoSpin.count !== 0) {
             this.ui.showIOSAlert("請先點擊主畫面的 Spin 按鈕終止「自動旋轉」後，再進行大獎測試！");
             return true;
         }
@@ -681,37 +318,37 @@ export default class SlotGameCtrl extends cc.Component {
         return false;
     }
 
-    /** 測試 Free Game：強制觸發，並依序控制接下來 8 局的空瓶數量 */
-    forceTriggerFreeGame() {
+    private triggerTestMatrix(matrix: SlotSymbolID[][]): void {
+        if (this.checkTestModeLocked()) return;
+        this.riggedMatrixQueue = [];
+        this.riggedMatrix = matrix;
+        this.onSpinClick();
+    }
+
+    forceTriggerFreeGame(): void {
         if (this.checkTestModeLocked()) return;
 
-        const _ = SlotSymbolID.J; // 用低賠率圖填滿其他格，以免干擾
+        const _ = SlotSymbolID.J;
         const S = SlotSymbolID.SCATTER;
-        const B = SlotSymbolID.BOTTLE;
 
-        // --- 1. 進場預備盤面 (確保有 3 個 Scatter 觸發 FG) ---
         const triggerMatrix = [
-            [S, _, _, _], // Reel 0
-            [_, _, _, _], // Reel 1
-            [S, _, _, _], // Reel 2
-            [_, _, _, _], // Reel 3
-            [S, _, _, _]  // Reel 4
+            [S, _, _, _],
+            [_, _, _, _],
+            [S, _, _, _],
+            [_, _, _, _],
+            [S, _, _, _]
         ];
 
-        // --- 2. FG 8局：使用隨機產生器 (修正：必須傳入 true 才會使用 FG 權重) ---
         const fgQueue: SlotSymbolID[][][] = [];
         for (let i = 0; i < 8; i++) {
             fgQueue.push(this.rng.generateMatrix(true));
         }
 
-        // --- 3. 接合： 先跑觸發的那一把，接著依序排入那8把 FG 結果
-        // 注意：這 8 局現在都是完全隨機的，不再有手動寫死的空瓶了
         this.riggedMatrixQueue = [triggerMatrix, ...fgQueue];
         this.onSpinClick();
     }
 
-    /** 測試 Big Win (>=50x)：塞滿 5 輪 S2 確保 60x 中獎 */
-    forceBigWin() {
+    forceBigWin(): void {
         if (this.checkTestModeLocked()) return;
         const T = SlotSymbolID.S2;
         this.triggerTestMatrix([
@@ -723,8 +360,7 @@ export default class SlotGameCtrl extends cc.Component {
         ]);
     }
 
-    /** 測試 Mega Win (>=100x)：塞滿 5 輪 S1 確保 100x 中獎 */
-    forceMegaWin() {
+    forceMegaWin(): void {
         if (this.checkTestModeLocked()) return;
         const T = SlotSymbolID.S1;
         this.triggerTestMatrix([
@@ -736,12 +372,11 @@ export default class SlotGameCtrl extends cc.Component {
         ]);
     }
 
-    /** 測試超級大獎 (Super Win: >=200x)：利用 S1 + Ways 確保 200x 中獎 */
-    forceSuperWin() {
+    forceSuperWin(): void {
         if (this.checkTestModeLocked()) return;
         const T = SlotSymbolID.S1;
         this.triggerTestMatrix([
-            [T, T, SlotSymbolID.Q, SlotSymbolID.K], // 第一輪放兩個，達成 2 Ways
+            [T, T, SlotSymbolID.Q, SlotSymbolID.K],
             [T, SlotSymbolID.J, SlotSymbolID.Q, SlotSymbolID.K],
             [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S2],
             [T, SlotSymbolID.TEN, SlotSymbolID.A, SlotSymbolID.S2],
@@ -749,8 +384,7 @@ export default class SlotGameCtrl extends cc.Component {
         ]);
     }
 
-    /** 測試全盤大獎 (Wild 全滿) */
-    forceFullWild() {
+    forceFullWild(): void {
         if (this.checkTestModeLocked()) return;
         const W = SlotSymbolID.WILD;
         this.triggerTestMatrix([
@@ -758,21 +392,17 @@ export default class SlotGameCtrl extends cc.Component {
         ]);
     }
 
-    /** 測試魔法門擴展：強制 1, 4, 5 輪出現巨型魔法門，並保證中獎 */
-    forceMagicDoor() {
+    forceMagicDoor(): void {
         if (this.checkTestModeLocked()) return;
         const M = SlotSymbolID.MAGIC_DOOR;
         const A = SlotSymbolID.A;
         const W = SlotSymbolID.WILD;
-
-        // 刻意寫死 3 個 Reel 出現連續的 MAGIC_DOOR
-        // 第 2, 3 輪塞入 WILD 確保不管揭曉什麼圖標都能連線中大獎
         this.triggerTestMatrix([
-            [M, M, M, A], // Reel 0 (前3格被門蓋住)
-            [A, W, A, A], // Reel 1 (塞一個 WILD 確保中獎)
-            [A, W, A, A], // Reel 2 (塞一個 WILD 確保中獎)
-            [A, A, M, M], // Reel 3 (後2格被門蓋住)
-            [M, M, M, M]  // Reel 4 (全滿)
+            [M, M, M, A],
+            [A, W, A, A],
+            [A, W, A, A],
+            [A, A, M, M],
+            [M, M, M, M]
         ]);
     }
 }

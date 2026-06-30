@@ -144,8 +144,21 @@ export default class SlotReelManager extends cc.Component {
      * @param onComplete 全部開門動畫完畢後呼叫
      */
     playMagicDoorExpansion(colIndices: number[], luckySymbol: SlotSymbolID, matrix: SlotSymbolID[][], onComplete: () => void) {
+        // 將 0 到最後一扇門之間所有「非門列」補上 WILD，確保 Ways 連線不斷鏈
+        const fillGapReelsWithWild = (colSet: number[]) => {
+            const lastDoorCol = Math.max(...colSet);
+            for (let c = 0; c <= lastDoorCol; c++) {
+                if (!colSet.includes(c)) {
+                    cc.log(`🩹 補 WILD 填補空隙：第 ${c} 輪`);
+                    for (let r = 0; r < 4; r++) matrix[c][r] = SlotSymbolID.WILD;
+                    this.reels[c].forceUpdateAllSymbols(SlotSymbolID.WILD);
+                }
+            }
+        };
+
         if (!this.magicDoorPrefab) {
             cc.warn("⚠️ magicDoorPrefab 未設定，直接強制替換圖標");
+            fillGapReelsWithWild(colIndices);
             colIndices.forEach(c => {
                 for (let r = 0; r < 4; r++) matrix[c][r] = luckySymbol;
                 this.reels[c].forceUpdateAllSymbols(luckySymbol);
@@ -156,15 +169,8 @@ export default class SlotReelManager extends cc.Component {
 
         let completedCount = 0;
 
-        // 1. 更新矩陣：將指定輪的大門位置替換為幸運圖標
-        // ★ 業界進階優化：如果大門不是從第 0 輪開始（斷聯），
-        // 則自動將前面的輪軸補上 WILD，確保 100% 必定中大獎！
-        const firstDoorCol = Math.min(...colIndices);
-        for (let c = 0; c < firstDoorCol; c++) {
-            cc.log(`🩹 修正斷聯：第 ${c} 輪補上 WILD`);
-            for (let r = 0; r < 4; r++) matrix[c][r] = SlotSymbolID.WILD;
-            this.reels[c].forceUpdateAllSymbols(SlotSymbolID.WILD);
-        }
+        // 1. 更新矩陣：門列填入 luckySymbol；非門列補 WILD 確保 Ways 連線完整
+        fillGapReelsWithWild(colIndices);
 
         colIndices.forEach((col, idx) => {
             const reel = this.reels[col];
