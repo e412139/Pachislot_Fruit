@@ -112,7 +112,7 @@ export default class GameManager extends cc.Component {
       this.spinParticle.stopSystem();
     }
 
-    if (this.audioService) {
+    if (this.audioService && !cc.audioEngine.isMusicPlaying()) {
       this.audioService.playNormalBGM();
     }
   }
