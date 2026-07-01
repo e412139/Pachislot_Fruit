@@ -5,7 +5,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Web_Mobile-green)]()
 [![License](https://img.shields.io/badge/License-Personal_Demo-lightgrey)]()
 
-> 兩款完整 HTML5 老虎機遊戲，從遊戲邏輯、滾輪動畫到 UI 演出全部自行實作。
+> 兩款完整 HTML5 老虎機與柏青機遊戲，從遊戲邏輯、滾輪動畫到 UI 演出全部自行實作。
 
 **🔗 Live Demo：[GitHub Pages 連結]** 
 [試玩連結](https://web-mobile-flame-one.vercel.app/)）
@@ -109,3 +109,10 @@ assets/
 # 部署到 GitHub Pages
 git subtree push --prefix build/web-mobile origin gh-pages
 ```
+
+---
+
+## 🎨 鳴謝與素材來源
+
+- **音樂與音效**：音樂與音效素材均來自 [Pixabay](https://pixabay.com/) 平台。
+- **圖形素材**：來自 Cocos Creator 官方平台與 AI 輔助設計。            
